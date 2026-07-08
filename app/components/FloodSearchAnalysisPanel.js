@@ -3,8 +3,6 @@
 import React, { useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 
-// ใช้ Heroicons หรือ Lucide แทน MUI Icons ได้ แต่ถ้าต้องการประหยัดเวลาผมจะคงการใช้ MUI Icons ไว้
-// แต่เปลี่ยนการห่อหุ้ม (Wrapper) ให้เป็น Tailwind แทน
 import HubIcon from "@mui/icons-material/Hub";
 import QueryStatsIcon from "@mui/icons-material/QueryStats";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
@@ -100,7 +98,7 @@ export default function FloodSearchAnalysisPanel({
 
   return (
     <div className="animate-in fade-in duration-500 space-y-8">
-      {/* ── KPI Section ── */}
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
     { label: "จำนวนความสัมพันธ์จากเหตุการณ์ที่พบ", val: kpis.total, unit: "รูปแบบ", color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200" },
@@ -227,18 +225,18 @@ export default function FloodSearchAnalysisPanel({
                       {topRule.consequents.map(translateWord).join(" + ")}
                     </span>
                   </p>
-                  {/* กล่องหมายเหตุแบบเส้นประ (บังคับรหัสสีส้มเพื่อแก้ปัญหาสีดำ) */}
+                  
                   <div
                     className="mt-5 p-5 rounded-2xl border-2 border-dashed bg-orange-50"
                     style={{ borderColor: "#fdba74" }}
                   >
                     <p className="text-orange-500 font-bold text-[15px] lg:text-[16px] mb-1.5">
-                      ค่าความแม่นยำ (Confidence):{" "}
+                      ค่าความแม่นยำ (Confidence) หรือโอกาสที่จะเกิดร่วมกัน:{" "}
                       {(topRule.confidence * 100).toFixed(1)}%
                     </p>
                     <p className="text-orange-400 font-medium text-[14px] lg:text-[15px]">
                       พฤติกรรมนี้เกิดขึ้นบ่อยกว่าปกติ {topRule.lift.toFixed(2)}{" "}
-                      เท่า (Lift)
+                      เท่า 
                     </p>
                   </div>
                 </div>
@@ -295,7 +293,7 @@ export default function FloodSearchAnalysisPanel({
                             {(rule.confidence * 100).toFixed(0)}%
                           </span>
                           <span className="text-[10px] font-bold text-slate-400 uppercase">
-                            ค่าความแม่นยำ
+                            โอกาสที่จะเกิดร่วมกัน 
                           </span>
                         </div>
                       </div>
