@@ -22,21 +22,21 @@ function toArray(val) {
   return String(val).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
 }
 
-// ── config สีและ label ของแต่ละฤดู ──
+
 const SEASON_CONFIG = {
   Rainy:  { label: 'ฤดูฝน (มิถุนายน - ตุลาคม)',    bgColor: 'bg-sky-50',   borderColor: 'border-sky-200',   badgeColor: 'bg-sky-100 text-sky-700'   },
   Winter: { label: 'ฤดูหนาว (พฤศจิกายน - กุมภาพันธ์)',  bgColor: 'bg-blue-50',  borderColor: 'border-blue-200',  badgeColor: 'bg-blue-100 text-blue-700' },
   Summer: { label: 'ฤดูร้อน (มีนาคม - พฤษภาคม)',  bgColor: 'bg-amber-50', borderColor: 'border-amber-200', badgeColor: 'bg-amber-100 text-amber-700' },
 };
 
-// ── แปลงชื่อ keyword ให้อ่านง่ายสำหรับประชาชน ──
+
 const KW_LABEL = {
   'Search_น้ำท่วม': 'น้ำท่วม',
   'Search_พายุ': 'พายุ',
   'Search_ระดับน้ำ': 'ระดับน้ำ',
   'Search_ฝนตกหนัก': 'ฝนตกหนัก',
-  'Search_อพยพ': 'เตรียมอพยพ',
-  'Search_สถานการณ์น้ำ': 'เช็คสถานการณ์น้ำ',
+  'Search_อพยพ': 'อพยพ',
+  'Search_สถานการณ์น้ำ': 'สถานการณ์น้ำ',
   'Rain_Heavy': 'ช่วงที่ฝนตกหนักกว่าปกติ',
 };
 
@@ -46,7 +46,7 @@ function kwLabel(s) {
   return t.replace('Search_', '');
 }
 
-// ── แปลง confidence เป็นภาษาชาวบ้าน ──
+
 function confToHuman(conf) {
   if (conf >= 95) return 'เกือบทุกครั้ง';
   if (conf >= 85) return 'บ่อยมาก (ประมาณ 8-9 ใน 10 ครั้ง)';
@@ -55,7 +55,7 @@ function confToHuman(conf) {
   return 'ประมาณครึ่งหนึ่งของเหตุการณ์';
 }
 
-// ── แปลง lift เป็นภาษาชาวบ้าน ──
+
 function liftToHuman(lift) {
   if (lift >= 4.0) return 'มีความสัมพันธ์กันแน่นแฟ้นมาก — คำเหล่านี้มักเกิดขึ้นพร้อมกันบ่อยกว่าปกติถึง ' + lift + ' เท่า';
   if (lift >= 3.0) return 'มีความสัมพันธ์กันสูง — คำเหล่านี้มักเกิดขึ้นพร้อมกันบ่อยกว่าปกติถึง ' + lift + ' เท่า';
@@ -74,7 +74,7 @@ const SEASON_DETAIL = {
     'ในช่วงฤดูร้อน แม้จะเป็นช่วงหน้าแล้ง แต่ประชาชนในบางพื้นที่ยังคงค้นหาเรื่อง "ระดับน้ำ" และ "เช็คสถานการณ์น้ำ" ร่วมกันอยู่ คาดว่าเป็นการติดตามข้อมูลเพื่อเฝ้าระวังปัญหาภัยแล้งหรือการบริหารจัดการน้ำในชุมชน'
 };
 
-// ── คำนวณ KEY_FINDINGS จาก rules จริง ──
+
 function computeFindings(rules) {
   let bySeason = { Rainy: [], Winter: [], Summer: [] };
 
@@ -171,7 +171,7 @@ function computeFindings(rules) {
   return findings;
 }
 
-// คำนวณเปอร์เซ็นต์ความเกี่ยวข้องกับฝน
+
 function computeRainRelatedRules(rules) {
   if (rules.length === 0) return 0;
   let withRain = 0;
@@ -187,7 +187,7 @@ function computeRainRelatedRules(rules) {
   return Math.round((withRain / rules.length) * 100);
 }
 
-// ── Component หลัก ──
+
 export default function FloodPatternInsight() {
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -333,7 +333,7 @@ export default function FloodPatternInsight() {
         </div>
         <div className="p-6 flex flex-col gap-4">
           <p className="text-[14px] text-slate-600 leading-[1.8]">
-            จากรูปแบบความสัมพันธ์ทั้งหมด พบว่า<strong className="text-slate-800">{rainRelatedPct}%</strong> ของรูปแบบเกี่ยวข้องกับช่วงที่มีฝนตกหนักกว่าปกติ ในพื้นที่นั้นจริง ๆ แสดงให้เห็นว่าปัจจัยด้านฝนมักปรากฏร่วมกับพฤติกรรมการค้นหาของประชาชนในชุดข้อมูลที่นำมาวิเคราะห์ 
+            จากรูปแบบความสัมพันธ์ทั้งหมด พบว่า<strong className="text-slate-800">{rainRelatedPct} %</strong> ของรูปแบบเกี่ยวข้องกับช่วงที่มีฝนตกหนักกว่าปกติ ในพื้นที่นั้นจริง ๆ แสดงให้เห็นว่าปัจจัยด้านฝนมักปรากฏร่วมกับพฤติกรรมการค้นหาของประชาชนในชุดข้อมูลที่นำมาวิเคราะห์ 
           </p>
 {/* 
           <div className="flex flex-col gap-1.5">

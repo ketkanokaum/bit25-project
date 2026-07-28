@@ -15,7 +15,7 @@ import EmojiObjectsIcon from "@mui/icons-material/EmojiObjects";
 import ShowChartIcon from "@mui/icons-material/ShowChart";       
 import ReportIcon from "@mui/icons-material/Report";             
 import VerifiedIcon from "@mui/icons-material/Verified";         
-import FloodSearchAnalysisPanel from "@/app/components/FloodSearchAnalysisPanel";
+import FloodSearchAnalysisPanel from "@/components/FloodSearchAnalysisPanel";
 
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
@@ -658,9 +658,9 @@ export default function RainfallImpactPanel({
       {isClient ? (
         <>
           
-          <div className="flex flex-wrap gap-3 justify-center md:justify-end">
+          {/* <div className="flex flex-wrap gap-3 justify-center md:justify-end">
             
-            <button
+              <button
               onClick={() => setViewMode("analysis")}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg ${
                 viewMode === "analysis"
@@ -681,7 +681,7 @@ export default function RainfallImpactPanel({
             >
               <QueryStatsIcon fontSize="small" /> พฤติกรรมการสืบค้น
             </button>
-          </div>
+          </div> */}
 
           
           <div className="bg-white rounded-2xl border border-sky-100 shadow-xl overflow-hidden">

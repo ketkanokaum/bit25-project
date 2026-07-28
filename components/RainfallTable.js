@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect} from 'react';
 import RainfallChart from './RainfallChart';
 
 
@@ -69,12 +69,18 @@ const RainBar = ({ amount, baseline }) => { // แสดงตัวเลขป
 
 
 export default function RainfallTable({ data = [] }) {
+  const [isClient, setIsClient] = useState(false);
   const [searchQuery, setSearchQuery]           = useState(''); // คำค้นหาจังหวัด
   const [selectedProvince, setSelectedProvince] = useState('ขอนแก่น');  // จังหวัดที่เลือก (default: ขอนแก่น)
   const [selectedYear, setSelectedYear]         = useState('All'); // ปีที่เลือก (default: All)
   const [selectedMonth, setSelectedMonth]       = useState('All'); // เดือนที่เลือก (default: All)
   const [page, setPage]                         = useState(0); // หน้าปัจจุบัน (default: 0)
   const [rowsPerPage, setRowsPerPage]           = useState(12); // จำนวนแถวต่อหน้า (default: 12)
+
+    useEffect(() => {
+    setIsClient(true);
+  }, []);
+
 
   const years = useMemo(() => {
     let u = []; // ดึงปีทั้งหมดจาก data ไม่ซ้ำ เรียงจากใหม่ไปเก่า
@@ -134,6 +140,16 @@ export default function RainfallTable({ data = [] }) {
       );
     }
   }
+
+  if (!isClient) {
+    return (
+      <div className="flex justify-center items-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
+        <span className="ml-3 text-slate-500 font-medium">กำลังโหลดข้อมูล...</span>
+      </div>
+    );
+  }
+
 
   return (
     <div className="flex flex-col w-full gap-4">
