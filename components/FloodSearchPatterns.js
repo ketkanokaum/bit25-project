@@ -348,7 +348,7 @@ function nodeCanvasObject(node, ctx, globalScale) {
   const label = node.id;
   const fontSize = 12 / globalScale;
   ctx.font = `bold ${fontSize}px Sans-Serif`;
-  ctx.fillStyle = node.group === "cause" ? "#f97316" : "#0284c7";
+  ctx.fillStyle = node.group === "cause" ? "#f97316" : "#0369a1";
   ctx.beginPath();
   ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI, false);
   ctx.fill();
@@ -679,7 +679,7 @@ const monthWindowData = useMemo(() => {
   if (!isClient) {
     return (
       <div className="min-h-[400px] bg-transparent rounded-2xl animate-pulse flex flex-col items-center justify-center gap-4">
-      <div className="w-12 h-12 border-4 border-sky-500/20 border-t-sky-500 rounded-full animate-spin"></div>
+      <div className="w-12 h-12 border-4 border-sky-700/20 border-t-sky-700 rounded-full animate-spin"></div>
       <div className="text-sky-600 font-bold uppercase tracking-widest text-sm">กำลังโหลดข้อมูล...</div>
     </div>
     );
@@ -688,14 +688,13 @@ const monthWindowData = useMemo(() => {
     <div className="space-y-6">
 
     {/* ── ตัวกรองข้อมูล ── */}
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 bg-slate-50">
-        <div className="p-2 rounded-lg bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center shadow-sm flex-shrink-0 text-white">
-          <TuneIcon fontSize="small" />
-        </div>
-        <h3 className="text-slate-800 font-bold text-sm m-0">ตัวกรองข้อมูล</h3>
-      </div>
-
+ <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+  <div className="flex items-center gap-3 px-5 py-3.5 bg-sky-700">
+    <div className="p-2 rounded-lg bg-white/15 flex items-center justify-center shadow-sm flex-shrink-0 text-white">
+      <TuneIcon fontSize="small" />
+    </div>
+    <h3 className="text-white font-bold text-sm m-0">ตัวกรองข้อมูล</h3>
+  </div>
       <div className="px-5 py-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
@@ -875,7 +874,7 @@ const monthWindowData = useMemo(() => {
 <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
 
   <div className="px-8 py-5 border-b border-slate-100 bg-slate-50 flex items-center gap-4">
-    <div className="p-2 rounded-lg bg-gradient-to-br from-red-500 to-red-600 shadow-sm text-white flex">
+    <div className="p-2 rounded-lg bg-sky-700 shadow-sm text-white flex">
       <ShowChartIcon fontSize="small" />
     </div>
     <div>
@@ -1196,7 +1195,7 @@ const monthWindowData = useMemo(() => {
     {/* คอลัมน์ซ้าย: พฤติกรรมการค้นหา */}
     <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
     <div className="px-6 py-5 border-b border-slate-100 bg-slate-50 flex items-center gap-4">
-    <div className="p-2 rounded-lg bg-gradient-to-br from-sky-500 to-sky-600 shadow-sm text-white flex">
+    <div className="p-2 rounded-lg bg-sky-700 shadow-sm text-white flex">
     <HubIcon fontSize="small" />
   </div>
     <div>
@@ -1300,7 +1299,7 @@ const monthWindowData = useMemo(() => {
   </div>
   </div>
     <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-    <div className="px-6 py-5 bg-[#2ab2f4] flex items-center gap-3">
+    <div className="px-6 py-5 bg-sky-700 flex items-center gap-3">
     <div className="p-1.5 bg-black/10 rounded-lg text-white flex items-center justify-center">
     <ReportIcon fontSize="small" />
   </div>
@@ -1319,11 +1318,11 @@ const monthWindowData = useMemo(() => {
     {hasRealEvent ? (
         <div className="overflow-x-auto">
         <table className="w-full text-left">
-        <thead className="bg-white border-b border-[#2ab2f4]/30 sticky top-0">
+        <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
         <tr>
-        <th className="px-4 py-3 text-[12px] font-bold text-[#1f91ce]">วันที่ / ปี</th>
-        <th className="px-4 py-3 text-[12px] font-bold text-[#1f91ce] text-center">ผู้ได้รับผลกระทบ</th>
-        <th className="px-4 py-3 text-[12px] font-bold text-[#1f91ce] text-center">เสียชีวิต</th>
+        <th className="px-4 py-3 text-[12px] font-bold text-sky-700">วันที่ / ปี</th>
+        <th className="px-4 py-3 text-[12px] font-bold text-sky-700 text-center">ผู้ได้รับผลกระทบ</th>
+        <th className="px-4 py-3 text-[12px] font-bold text-sky-700 text-center">เสียชีวิต</th>
       </tr>
       </thead>
         <tbody className="divide-y divide-white/50 bg-[#fffdf0]">
@@ -1332,7 +1331,7 @@ const monthWindowData = useMemo(() => {
               <td className="px-4 py-3 font-bold text-slate-800 text-[13px]">
               {e.date ? formatThaiDate(e.date) : `${thaiMonthNames[selectedMonth]} ${parseInt(e.year) + 543}`}
             </td>
-              <td className="px-4 py-3 text-center font-bold text-[#2ab2f4] text-[13px]">
+              <td className="px-4 py-3 text-center font-bold text-sky-700 text-[13px]">
               {parseInt(e.affected_people) > 0 ? parseInt(e.affected_people).toLocaleString() : "ไม่มีบันทึก"}
             </td>
               <td className="px-4 py-3 text-center font-bold text-slate-400 text-[13px]">
@@ -1345,7 +1344,7 @@ const monthWindowData = useMemo(() => {
       </div>
       ) : (
         <div className="p-8 flex flex-col items-center justify-center gap-3 bg-white h-full text-center">
-        <div className="p-4 bg-sky-50 rounded-full border border-sky-100 text-sky-400">
+        <div className="p-4 bg-slate-100 rounded-full border border-slate-200 text-slate-400">
         <WaterDropIcon fontSize="large" />
       </div>
         <p className="text-slate-500 font-bold text-sm">

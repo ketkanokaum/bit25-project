@@ -1,4 +1,4 @@
-// app/page.jsx — หน้าพยากรณ์ฝน (หน้าแรก)
+// app/page.jsx — หน้าปริมาณน้ำฝนล่วงหน้า (หน้าแรก)
 // ── Mockup: แสดงตัวอย่าง UI รอโมเดลเสร็จ ──
 'use client';
 
@@ -57,15 +57,17 @@ export default function ForecastPage() {
   }, []);
 
   return (
-    <div className="min-h-screen pb-24 md:pb-0 font-sans">
+    // เอาสีพื้นหลังฟ้าออก ให้ globals.css คุมที่เดียว
+    // เอา pb-24 ออกด้วย เพราะ navbar ไม่มีแถบเมนูล่างแล้ว
+    <div className="min-h-screen font-sans">
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 lg:px-6 py-8 flex flex-col gap-6">
-        
+
         {/* ── หัวข้อหน้าเว็บ ── */}
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight leading-tight">
-            แนวโน้มปริมาณน้ำฝนล่วงหน้า 1 เดือน 
+            ปริมาณน้ำฝนล่วงหน้า 1 เดือน
           </h1>
           <p className="text-slate-500 text-[15px]">
             รายจังหวัดในประเทศไทย
@@ -80,18 +82,23 @@ export default function ForecastPage() {
           </p>
         </div>
 
-        {/* ── เลือกจังหวัด ── */}
-        <div className="bg-white rounded-2xl border border-sky-100 shadow-md overflow-hidden">
-          <div className="px-6 py-4 bg-gradient-to-r from-sky-500 to-sky-600 flex items-center gap-3">
-            <div className="p-2 bg-white/20 rounded-xl">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
-              </svg>
-            </div>
-            <h2 className="text-white font-bold text-[15px]">เลือกจังหวัดที่ต้องการ</h2>
-          </div>
-          <div className="p-6">
-            <div className="flex items-center bg-sky-50 border border-sky-200 rounded-xl px-4 focus-within:border-sky-500 focus-within:ring-2 ring-sky-100 transition-all">
+        {/* แจ้งว่ายังเป็นตัวอย่าง ป้องกันการเข้าใจผิดว่าเป็นผลจริง */}
+        <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-bold">
+          หน้านี้เป็นตัวอย่างการแสดงผล ยังไม่ได้เชื่อมต่อกับแบบจำลองจริง
+          ตัวเลขที่เห็นเป็นข้อมูลสมมติสำหรับทดสอบหน้าจอ
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="flex items-center gap-3 px-5 py-3.5 bg-sky-700">
+      <div className="p-2 rounded-lg bg-white/15 flex items-center justify-center shadow-sm flex-shrink-0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+        </svg>
+      </div>
+      <h2 className="text-white font-bold text-sm">เลือกจังหวัดที่ต้องการ</h2>
+    </div>
+          <div className="px-5 py-4">
+            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 transition-all focus-within:bg-white focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
               <select
                 value={selectedProvince}
                 onChange={(e) => setSelectedProvince(e.target.value)}
@@ -101,7 +108,7 @@ export default function ForecastPage() {
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
-              <div className="pointer-events-none text-sky-500 ml-2">
+              <div className="pointer-events-none text-slate-400 ml-2">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
                 </svg>
@@ -111,12 +118,12 @@ export default function ForecastPage() {
         </div>
 
         {/* ── ผลพยากรณ์ ── */}
-        <div className={`rounded-2xl border-2 shadow-md overflow-hidden ${style.border}`}>
+        <div className={`rounded-2xl border shadow-sm overflow-hidden ${style.border}`}>
           <div className={`px-6 py-5 ${style.bg}`}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[12px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                  แนวโน้มปริมาณน้ำฝนในเดือน {forecast.month} {forecast.year}
+                  ปริมาณน้ำฝนที่คาดการณ์ เดือน{forecast.month} {forecast.year}
                 </p>
                 <p className="text-[42px] font-black text-slate-800 leading-none">
                   {forecast.predicted_rain}

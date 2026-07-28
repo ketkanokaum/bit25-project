@@ -10,7 +10,7 @@ export default async function RainfallPage() {
   const data = await getRainfallData();
 
   return (
-    <div className="min-h-screen pb-24 md:pb-0 font-sans" style={{ backgroundColor: '#e0f2fe' }}>
+      <div className="min-h-screen font-sans">
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 lg:px-6 py-8 flex flex-col gap-6">

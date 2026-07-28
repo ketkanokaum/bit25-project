@@ -9,12 +9,12 @@ const IconTune   = () => <svg className="w-4 h-4 text-white" viewBox="0 0 24 24"
 const IconDrop   = () => <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8z"/></svg>;
 const IconChart  = () => <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>;
 const IconSearch = () => <svg className="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>;
-const IconPin    = () => <svg className="w-3 h-3 text-sky-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>;
-const IconCal    = () => <svg className="w-3 h-3 text-sky-500" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>;
+const IconPin    = () => <svg className="w-3 h-3 text-sky-700" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>;
+const IconCal    = () => <svg className="w-3 h-3 text-sky-700" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>;
 
 const cardCls       = "bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col";
 const cardHeaderCls = "flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 bg-slate-50";
-const iconWrapCls   = "p-2 rounded-lg bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center shadow-sm flex-shrink-0";
+const iconWrapCls   = "p-2 rounded-lg bg-sky-700 flex items-center justify-center shadow-sm flex-shrink-0";
 
 const thaiMonths = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -66,6 +66,8 @@ const RainBar = ({ amount, baseline }) => { // แสดงตัวเลขป
     </span>
   );
 };
+
+
 
 
 export default function RainfallTable({ data = [] }) {
@@ -156,9 +158,9 @@ export default function RainfallTable({ data = [] }) {
 
       {/* ══ Filter Card ══ */}
       <div className={cardCls}>
-        <div className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-sky-600 to-sky-500">
-          <div className="p-1.5 rounded-lg bg-white/20 flex items-center justify-center"><IconTune /></div>
-          <h3 className="text-white font-semibold text-sm m-0">ตัวกรองข้อมูล</h3>
+        <div className="flex items-center gap-3 px-5 py-3.5 bg-sky-700">
+          <div className="p-2 rounded-lg bg-white/15 flex items-center justify-center shadow-sm flex-shrink-0"><IconTune /></div>
+          <h3 className="text-white font-bold text-sm m-0">ตัวกรองข้อมูล</h3>
         </div>
         <div className="px-5 py-4">
         
@@ -167,8 +169,8 @@ export default function RainfallTable({ data = [] }) {
 
   <div className="flex flex-col gap-2">
     <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest pl-2">ค้นหาจังหวัด</label>
-    <div className="flex items-center bg-sky-50 border border-sky-200 rounded-xl px-4 transition-all focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
-      <span className="text-sky-500 mr-2 flex-shrink-0">
+    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 transition-all focus-within:bg-white focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
+      <span className="text-slate-400 mr-2 flex-shrink-0">
         <IconSearch />
       </span>
       <input 
@@ -188,7 +190,7 @@ export default function RainfallTable({ data = [] }) {
 
   <div className="flex flex-col gap-2">
     <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest pl-2">จังหวัด</label>
-    <div className="flex items-center bg-sky-50 border border-sky-200 rounded-xl px-4 transition-all focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
+    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 transition-all focus-within:bg-white focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
       <select 
         value={selectedProvince}
         onChange={(e) => { setSelectedProvince(e.target.value); setSearchQuery(''); setPage(0); }}
@@ -196,7 +198,7 @@ export default function RainfallTable({ data = [] }) {
       >
         {provinceOptions}
       </select>
-      <div className="pointer-events-none text-sky-500 ml-2">
+      <div className="pointer-events-none text-slate-400 ml-2">
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
       </div>
     </div>
@@ -205,7 +207,7 @@ export default function RainfallTable({ data = [] }) {
 
   <div className="flex flex-col gap-2">
     <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest pl-2">ปี พ.ศ.</label>
-    <div className="flex items-center bg-sky-50 border border-sky-200 rounded-xl px-4 transition-all focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
+    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 transition-all focus-within:bg-white focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
       <select 
         value={selectedYear}
         onChange={(e) => { setSelectedYear(e.target.value); setPage(0); }}
@@ -213,7 +215,7 @@ export default function RainfallTable({ data = [] }) {
       >
         {years.map(y => <option key={y} value={y}>{y === 'All' ? 'ทั้งหมด' : parseInt(y) + 543}</option>)}
       </select>
-      <div className="pointer-events-none text-sky-500 ml-2">
+      <div className="pointer-events-none text-slate-400 ml-2">
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
       </div>
     </div>
@@ -222,7 +224,7 @@ export default function RainfallTable({ data = [] }) {
 
   <div className="flex flex-col gap-2">
     <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest pl-2">เดือน</label>
-    <div className="flex items-center bg-sky-50 border border-sky-200 rounded-xl px-4 transition-all focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
+    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 transition-all focus-within:bg-white focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
       <select 
         value={selectedMonth}
         onChange={(e) => { setSelectedMonth(e.target.value); setPage(0); }} //ค่าที่เลือกปัจจุบัน
@@ -230,7 +232,7 @@ export default function RainfallTable({ data = [] }) {
       >
         {months.map(m => <option key={m} value={m}>{m === 'All' ? 'ทั้งหมด' : thaiMonths[parseInt(m) - 1]}</option>)} 
       </select>
-      <div className="pointer-events-none text-sky-500 ml-2">
+      <div className="pointer-events-none text-slate-400 ml-2">
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
       </div>
     </div>
@@ -325,9 +327,7 @@ export default function RainfallTable({ data = [] }) {
         
         <div className={`${cardCls} w-full md:w-[40%]`} style={{ minHeight: '500px' }}>
           <div className={cardHeaderCls}>
-            <div className="p-2 rounded-lg bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center shadow-sm flex-shrink-0">
-                <IconChart />
-                </div>
+            <div className={iconWrapCls}><IconChart /></div>
             <div>
               <h3 className="font-bold text-slate-800 text-sm leading-tight">แนวโน้มปริมาณน้ำฝน</h3>
               <p className="text-xs text-slate-400 m-0">
