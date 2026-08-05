@@ -51,13 +51,14 @@ const REAL_DATA_YEARS = [2020, 2021, 2022, 2023, 2024];
 const RULE_BASE_YEARS = REAL_DATA_YEARS;
 
 // ขอบเขตข้อมูลจริงในฐานข้อมูล
-const SEARCH_END_YEAR = 2025;    // search_trends มีถึง ธ.ค. 2568
-const SEARCH_END_MONTH = 12;
+const SEARCH_END_YEAR = 2026;    // search_trends มีถึง มิ.ย. 2569
+const SEARCH_END_MONTH = 6;
 const RAIN_END_YEAR = 2026;      // rainfall_monthly มีถึง พ.ค. 2569
 const RAIN_END_MONTH = 5;
 
 // ปีสุดท้ายที่ให้เลือกได้ในหน้าเว็บ (ต้องตรงกับตัวเลือกปีด้านล่าง)
-const LAST_SELECTABLE_YEAR = 2027;
+// ค่าแนวโน้มมีให้แค่ปี 2568-2569 เท่านั้น ไม่ต้องเผื่อไปถึง 2570
+const LAST_SELECTABLE_YEAR = 2026;
 
 // ปีสุดท้ายที่มีสถิติจริง ใช้เป็นจุดต่อระหว่างเส้นทึบกับเส้นประ
 const LAST_REAL_YEAR = REAL_DATA_YEARS[REAL_DATA_YEARS.length - 1];
@@ -91,7 +92,7 @@ function formatThaiDate(dateStr) {
 const translateWord = (word) => {
   const dict = {
     Rain_Heavy: "ฝนตกหนัก",
-    Search_ฝนตกหนัก: "ค้นหา 'ฝนตกหนัก'",
+    Search_ฝนตก: "ค้นหา 'ฝนตก'",
     Search_น้ำท่วม: "ค้นหา 'น้ำท่วม'",
     Search_พายุ: "ค้นหา 'พายุ'",
     Search_อพยพ: "ค้นหา 'อพยพ'",
@@ -101,15 +102,6 @@ const translateWord = (word) => {
   return dict[word] || word;
 };
 
-
-const antecedentToField = {
-  Search_น้ำท่วม: "search_flood",
-  Search_ฝนตกหนัก: "search_rain",
-  Search_พายุ: "search_storm",
-  Search_ระดับน้ำ: "search_water_level",
-  Search_สถานการณ์น้ำ: "search_water_situation",
-  Search_อพยพ: "search_evacuate",
-};
 
 // antecedents ในฐานข้อมูลเก็บเป็นสตริง "Rain_Heavy, Search_พายุ"
 // เดิมไม่ได้ split ทำให้กฎที่มีหลายเงื่อนไข (54% ของทั้งหมด) ถูกตัดทิ้ง
@@ -166,7 +158,7 @@ function getMonthRow(data, province, year, month) {
 }
 
 // ── ค่าฝนปกติ (baseline) ของจังหวัดนั้นเดือนนั้น ──────────
-// baseline_mean ติดมากับทุกแถวแล้วจาก LEFT JOIN ใน rainfall.js
+
 // เดือน 8-12 ยังไม่มีในตาราง จะเป็น null ให้คำนวณจากค่าเฉลี่ยย้อนหลังแทน
 function getBaseline(data, province, month) {
   const rows = data.filter(
@@ -361,6 +353,9 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
   const data = initialData;
   const rulesArray = Array.isArray(initialRules) ? initialRules : [];
   const [selectedProvince, setSelectedProvince] = useState("ขอนแก่น");
+  // ตัวกรองความเข้มของกฎที่แสดง — ค่าเริ่มต้น 0.1 ตรงกับ min_threshold
+  // ที่ใช้ตอนขุดกฎใน Colab (ต่ำกว่านี้ไม่เคยถูก export ออกมาอยู่แล้ว)
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.1);
   const [searchQuery, setSearchQuery] = useState("");
 const [selectedYear, setSelectedYear] = useState("2026");
 const [selectedMonth, setSelectedMonth] = useState(1);
@@ -422,7 +417,12 @@ const [selectedMonth, setSelectedMonth] = useState(1);
       rulesArray.forEach((r) => {
           if (r.year) years.add(parseInt(r.year));
       });
-      return Array.from(years).sort((a, b) => b - a);
+      // ตัดปีที่หลุดมาจากข้อมูลดิบ (เช่น 2561-2562 ที่ rainfall_monthly มี
+      // แต่ระบบยังไม่รองรับ เพราะอยู่นอกช่วง REAL_DATA_YEARS ถึง LAST_SELECTABLE_YEAR)
+      const filteredYears = Array.from(years).filter(
+        (y) => y >= REAL_DATA_YEARS[0] && y <= LAST_SELECTABLE_YEAR
+      );
+      return filteredYears.sort((a, b) => b - a);
     }, [rulesArray, data]);
   const isForecastYear = !REAL_DATA_YEARS.includes(parseInt(selectedYear));
   const monthRow = useMemo(() => {
@@ -444,6 +444,7 @@ const [selectedMonth, setSelectedMonth] = useState(1);
   // สูงกว่าค่าปกติกี่เปอร์เซ็นต์
   const rainPercentDiff =
     monthRow && baseline.value ? Math.round(((avgRain - baseline.value) / baseline.value) * 100) : null;
+
   const currentRules = useMemo(() => {
       if (isForecastYear) return [];
       return rulesArray
@@ -453,96 +454,106 @@ const [selectedMonth, setSelectedMonth] = useState(1);
         parseInt(r.year) === parseInt(selectedYear) &&
         parseInt(r.month) === parseInt(selectedMonth)
       )
-      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+      .sort((a, b) => (a.confidence || 0) - (b.confidence || 0));
     }, [rulesArray, selectedProvince, selectedYear, selectedMonth, isForecastYear]);
-  const historicalMonthRules = useMemo(() => {
+  // รูปแบบของปี 2568-2569 คำนวณสดจากข้อมูลจริงของเดือนนั้น ไม่พึ่งตารางสำเร็จรูป
+  // เพราะข้อมูล Google Trends/ฝนอัปเดตได้เรื่อยๆ แต่ตารางสำเร็จรูปนิ่งอยู่กับที่
+  // ตั้งแต่ตอนรัน notebook ครั้งล่าสุด
+  const antecedentToField = {
+    Search_น้ำท่วม: "search_flood",
+    Search_ฝนตก: "search_rain",
+    Search_พายุ: "search_storm",
+    Search_ระดับน้ำ: "search_water_level",
+    Search_สถานการณ์น้ำ: "search_water_situation",
+    Search_อพยพ: "search_evacuate",
+  };
+
+  // หาจุดตัด Low/Medium/High ของแต่ละคำค้น จากข้อมูลจริง 5 ปีฐาน (2563-2567)
+  // ใช้ปีฐานเดียวกับที่ notebook ใช้ตอนขุดกฎ ให้เทียบกันได้ตรงๆ
+  const fieldThresholds = useMemo(() => {
+      const result = {};
+      SEARCH_FIELDS.forEach((f) => {
+          const values = data
+          .filter((r) => r.province === selectedProvince && RULE_BASE_YEARS.includes(parseInt(r.year)) && r[f] != null)
+          .map((r) => Number(r[f]))
+          .sort((a, b) => a - b);
+          if (values.length === 0) {
+            result[f] = null;
+            return;
+          }
+          result[f] = {
+              p33: values[Math.floor(values.length * 0.33)],
+              p67: values[Math.floor(values.length * 0.67)],
+          };
+      });
+      return result;
+    }, [data, selectedProvince]);
+
+  function levelOfValue(value, thr) {
+    if (value == null || thr == null) return null;
+    if (value <= thr.p33) return "Low";
+    if (value <= thr.p67) return "Medium";
+    return "High";
+  }
+
+  // ระดับจริงของเดือนที่เลือก คำนวณจากข้อมูลปัจจุบัน
+  const currentLevels = useMemo(() => {
+      const levels = {};
+      SEARCH_FIELDS.forEach((f) => {
+          const val = monthRow && monthRow[f] != null ? Number(monthRow[f]) : null;
+          levels[f] = levelOfValue(val, fieldThresholds[f]);
+      });
+      levels.rain = isHeavyRainActual ? "High" : "NotHigh";
+      return levels;
+    }, [monthRow, fieldThresholds, isHeavyRainActual]);
+
+  const pendingRules = useMemo(() => {
+      if (!isForecastYear) return [];
+      // รวมกฎทั้งหมดของจังหวัด+เดือนนี้จากประวัติ 2563-2567 (ไม่จำกัดปีใดปีหนึ่ง)
       const pool = rulesArray.filter(
-        (r) =>
-        r.province === selectedProvince &&
-        parseInt(r.month) === parseInt(selectedMonth) &&
-        RULE_BASE_YEARS.includes(parseInt(r.year))
+        (r) => r.province === selectedProvince && parseInt(r.month) === parseInt(selectedMonth)
       );
       const map = new Map();
       pool.forEach((r) => {
           const key = asArray(r.antecedents).join(",") + "=>" + asArray(r.consequents).join(",");
           if (!map.has(key)) {
-            map.set(key, {
-                antecedents: asArray(r.antecedents),
-                consequents: asArray(r.consequents),
-                confidenceSum: 0,
-                count: 0,
-                monthsWithFlood: 0,
-            });
+            map.set(key, { antecedents: asArray(r.antecedents), consequents: asArray(r.consequents), confidenceSum: 0, count: 0 });
           }
           const entry = map.get(key);
           entry.confidenceSum += r.confidence || 0;
           entry.count += 1;
-          entry.monthsWithFlood += parseInt(r.months_with_flood) || 0;
       });
-      let merged = Array.from(map.values()).map((e) => ({
+      const merged = Array.from(map.values()).map((e) => ({
             antecedents: e.antecedents,
             consequents: e.consequents,
             confidence: e.confidenceSum / e.count,
-            monthsWithFlood: e.monthsWithFlood,
       }));
-      merged.sort((a, b) => b.confidence - a.confidence);
-      if (merged.length > 8) {
-        const filtered = merged.filter((m) => m.monthsWithFlood > 0);
-        merged = filtered.length > 0 ? filtered : merged.slice(0, 8);
-      }
-      return merged;
-    }, [rulesArray, selectedProvince, selectedMonth]);
-  const historicalAvgByField = useMemo(() => {
-      const fields = ["search_flood", "search_rain", "search_storm", "search_water_level", "search_water_situation", "search_evacuate"];
-      const sums = {};
-      const counts = {};
-      fields.forEach((f) => {
-          sums[f] = 0;
-          counts[f] = 0;
-      });
-      data.forEach((row) => {
-          if (row.province === selectedProvince && parseInt(row.month) === parseInt(selectedMonth) && RULE_BASE_YEARS.includes(parseInt(row.year))) {
-            fields.forEach((f) => {
-                sums[f] += Number(row[f]) || 0;
-                counts[f] += 1;
-            });
-          }
-      });
-      const avg = {};
-      fields.forEach((f) => {
-          avg[f] = counts[f] > 0 ? sums[f] / counts[f] : 0;
-      });
-      return avg;
-    }, [data, selectedProvince, selectedMonth]);
-  // กรองเฉพาะกฎที่เข้าเงื่อนไขสำหรับปีพยากรณ์
-  const forecastRules = useMemo(() => {
-      if (!isForecastYear || !monthRow) return [];
-      return historicalMonthRules
-      .map((rule) => {
-          const checks = rule.antecedents.map((ant) => {
-              if (ant === "Rain_Heavy") {
-                return { label: translateWord(ant), met: isHeavyRainActual };
-              }
-              const field = antecedentToField[ant];
-              if (!field) return { label: translateWord(ant), met: null };
-              const currentVal = Number(monthRow[field]) || 0;
-              const histAvg = historicalAvgByField[field] || 0;
-              return { label: translateWord(ant), met: currentVal >= histAvg };
-          });
-          const metCount = checks.filter((c) => c.met === true).length;
-          return { ...rule, checks, metCount, totalConditions: checks.length };
-      })
-      .filter((rule) => rule.metCount > 0); // แสดงเฉพาะกฎที่เข้าเงื่อนไข
-    }, [isForecastYear, monthRow, historicalMonthRules, isHeavyRainActual, historicalAvgByField]);
-  // คำนวณความเชื่อมั่นเฉลี่ยเฉพาะกฎที่พบจริง
-  const avgConfidencePct = useMemo(() => {
-      const source = isForecastYear ? forecastRules : currentRules;
-      if (!source || source.length === 0) return null;
-      const sum = source.reduce((acc, r) => acc + (r.confidence || 0), 0);
-      return Math.round((sum / source.length) * 100);
-    }, [currentRules, forecastRules, isForecastYear]);
+
+      // เก็บเฉพาะกฎที่ข้อมูลจริงของเดือนนี้เข้าเงื่อนไขครบทุกข้อ (antecedent เป็น High ทั้งหมด)
+      return merged
+      .filter((rule) =>
+        rule.antecedents.every((ant) => {
+            if (ant === "Rain_Heavy") return currentLevels.rain === "High";
+            const field = antecedentToField[ant];
+            if (!field) return false;
+            return currentLevels[field] === "High";
+        })
+      )
+      .sort((a, b) => a.confidence - b.confidence);
+    }, [isForecastYear, rulesArray, selectedProvince, selectedMonth, currentLevels]);
+  // นับว่าตัวกรองความมั่นใจตัดกฎออกไปกี่อัน ให้ผู้ใช้เห็นผลชัดเจน
+  // แม้ตอนที่หน้าตารายการไม่เปลี่ยนไป (เพราะกฎที่มีอยู่ผ่านเกณฑ์เดิมอยู่แล้ว)
+  const ruleCountInfo = useMemo(() => {
+      const source = isForecastYear ? pendingRules : currentRules;
+      const total = source ? source.length : 0;
+      const shown = source ? source.filter((r) => (r.confidence || 0) >= confidenceThreshold).length : 0;
+      return { total, shown };
+    }, [currentRules, pendingRules, isForecastYear, confidenceThreshold]);
   const graphData = useMemo(() => {
-      const rulesForGraph = isForecastYear ? forecastRules : currentRules;
+      const source = isForecastYear ? pendingRules : currentRules;
+      // currentRules/pendingRules เรียงน้อยไปมากสำหรับแสดงผลเป็นรายการ
+      // แต่กราฟยังอยากได้กฎที่มั่นใจสูงสุดมาแสดง จึงเรียงใหม่เฉพาะจุดนี้
+      const rulesForGraph = [...source].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
       const nodesMap = new Map();
       const links = [];
       const maxRules = Math.min(rulesForGraph.length, 15);
@@ -559,7 +570,7 @@ const [selectedMonth, setSelectedMonth] = useState(1);
         });
       }
       return { nodes: Array.from(nodesMap.values()), links };
-    }, [currentRules, forecastRules, isForecastYear]);
+    }, [currentRules, pendingRules, isForecastYear]);
   // เหตุการณ์จริงทั้งหมดในเดือนนี้ (มีแถว = เกิดจริง)
   const realEvents = useMemo(() => {
       const years = isForecastYear ? REAL_DATA_YEARS : [parseInt(selectedYear)];
@@ -616,10 +627,10 @@ const [selectedMonth, setSelectedMonth] = useState(1);
             ปี: `พ.ศ. ${y + 543}`,
             // ปีที่ไม่มีข้อมูลฝนให้เป็น null กราฟจะเว้นช่วง ไม่ใช่ลากลงศูนย์
             ปริมาณฝน: row ? Math.round(parseFloat(row.average_rain) || 0) : null,
-            // แยกสองเส้นตามชนิดข้อมูล เพื่อไม่ให้ข้อเท็จจริงกับค่าประเมินปนกัน
+            // แยกสองเส้นตามชนิดข้อมูล เพื่อไม่ให้ข้อเท็จจริงกับค่าแนวโน้มปนกัน
             // ปีรอยต่อ (2567) ใส่ค่าทั้งสองเส้น เส้นประจะได้ต่อจากเส้นทึบไม่ขาด
             สถิติจริง: isForecast ? null : chancePct,
-            ค่าประเมิน: isForecast || y === LAST_REAL_YEAR ? chancePct : null,
+            ค่าแนวโน้ม: isForecast || y === LAST_REAL_YEAR ? chancePct : null,
             วิธี: result.label,
             isForecast,
           };
@@ -762,7 +773,7 @@ const monthWindowData = useMemo(() => {
                 {allYears.map((year) => (
                   <option key={year} value={year}>
                     พ.ศ. {year + 543}
-                    {!REAL_DATA_YEARS.includes(year) ? " (ประเมิน)" : ""}
+                    {!REAL_DATA_YEARS.includes(year) ? " (แนวโน้ม)" : ""}
                   </option>
                 ))}
               </select>
@@ -807,13 +818,13 @@ const monthWindowData = useMemo(() => {
         <div className="px-5 pb-4 -mt-1 space-y-2">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-bold">
             <AutoGraphIcon fontSize="small" />
-            ปีนี้ยังไม่มีสถิติอุทกภัยยืนยัน — ประเมินจากฐานข้อมูลปี {REAL_DATA_YEARS[0] + 543}–{LAST_REAL_YEAR + 543} โดยวิธี: {prediction.label}
+            ปีนี้ยังไม่มีสถิติอุทกภัยยืนยัน — หาแนวโน้มจากฐานข้อมูลปี {REAL_DATA_YEARS[0] + 543}–{LAST_REAL_YEAR + 543} 
           </div>
-          {prediction.note && (
+          {/* {prediction.note && (
             <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-[11px] font-bold">
               หมายเหตุ: {prediction.note}
             </div>
-          )}
+          )} */}
         </div>
       )}
     </div>
@@ -824,7 +835,7 @@ const monthWindowData = useMemo(() => {
       prediction.willFlood ? "bg-orange-50 border-orange-200" : "bg-emerald-50 border-emerald-200"
     }`}>
     <p className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-2">
-    {isForecastYear ? "โอกาสเกิดอุทกภัย (ประเมิน)" : "สถานะอุทกภัย (สถิติจริง)"}
+    {isForecastYear ? "โอกาสเกิดอุทกภัย (แนวโน้ม)" : "สถานะอุทกภัย (สถิติจริง)"}
   </p>
     <div className="flex items-baseline gap-1">
     {isForecastYear ? (
@@ -865,7 +876,7 @@ const monthWindowData = useMemo(() => {
     )}
   </div>
     <p className="text-[11px] text-slate-400/70 font-bold mt-1">
-    {monthRow ? rainVsBaselineLabel : `ยังไม่มีข้อมูลฝนของเดือนนี้ · ${rainVsBaselineLabel}`}
+    {monthRow ? rainVsBaselineLabel :  rainVsBaselineLabel}
   </p>
   </div>
   </div>
@@ -919,8 +930,8 @@ const monthWindowData = useMemo(() => {
               if (name === "สถิติจริง") {
                 return [value === 100 ? "เกิดอุทกภัย" : "ไม่เกิดอุทกภัย", "สถิติจริง"];
               }
-              if (name === "ค่าประเมิน") {
-                return [`${value}%`, "โอกาสเกิดอุทกภัย (ประเมิน)"];
+              if (name === "ค่าแนวโน้ม") {
+                return [`${value}%`, "โอกาสเกิดอุทกภัย (แนวโน้ม)"];
               }
               if (name === "ปริมาณฝน") {
                 return value === null ? ["ไม่มีข้อมูล", "ปริมาณฝน"] : [`${value} มม.`, "ปริมาณฝน"];
@@ -935,14 +946,14 @@ const monthWindowData = useMemo(() => {
             }}
           />
 
-          {/* แรเงาพื้นหลังช่วงที่เป็นค่าประเมิน ให้แยกออกจากช่วงสถิติจริงชัดเจน */}
+          {/* แรเงาพื้นหลังช่วงที่เป็นค่าแนวโน้ม ให้แยกออกจากช่วงสถิติจริงชัดเจน */}
           <ReferenceArea
             yAxisId="chance"
             x1={`พ.ศ. ${LAST_REAL_YEAR + 543}`}
             x2={`พ.ศ. ${LAST_SELECTABLE_YEAR + 543}`}
             fill="#8b5cf6"
             fillOpacity={0.07}
-            label={{ value: "ช่วงประเมิน", position: "insideTop", fontSize: 10, fill: "#8b5cf6" }}
+            label={{ value: "ช่วงแนวโน้ม", position: "insideTop", fontSize: 10, fill: "#8b5cf6" }}
           />
 
           {/* เส้น 50% = เกณฑ์ตัดสินว่าเกิดหรือไม่เกิด */}
@@ -977,11 +988,11 @@ const monthWindowData = useMemo(() => {
             }}
           />
 
-          {/* เส้นประ: ค่าประเมิน จุดกลวงเพื่อบอกว่าไม่ใช่ข้อเท็จจริง */}
+          {/* เส้นประ: ค่าแนวโน้ม จุดกลวงเพื่อบอกว่าไม่ใช่ข้อเท็จจริง */}
           <Line
             yAxisId="chance"
             type="monotone"
-            dataKey="ค่าประเมิน"
+            dataKey="ค่าแนวโน้ม"
             stroke="#8b5cf6"
             strokeWidth={2.5}
             strokeDasharray="7 4"
@@ -1001,14 +1012,14 @@ const monthWindowData = useMemo(() => {
             }}
           />
 
-          {/* เส้นแบ่งช่วงที่มีสถิติจริง กับช่วงที่ประเมิน */}
+          {/* เส้นแบ่งช่วงที่มีสถิติจริง กับช่วงที่เป็นแนวโน้ม */}
           <ReferenceLine
             yAxisId="chance"
             x={`พ.ศ. ${LAST_REAL_YEAR + 1 + 543}`}
             stroke="#8b5cf6"
             strokeDasharray="4 2"
             strokeOpacity={0.5}
-            label={{ value: "เริ่มประเมิน", position: "top", fontSize: 10, fill: "#8b5cf6" }}
+            label={{ value: "เริ่มแนวโน้ม", position: "top", fontSize: 10, fill: "#8b5cf6" }}
           />
 
         </LineChart>
@@ -1147,85 +1158,138 @@ const monthWindowData = useMemo(() => {
         <span className="w-3 h-3 rounded-full bg-slate-400 inline-block" />
         <span className="text-xs font-bold text-slate-500">ต่ำกว่า 50% · ไม่เกิดอุทกภัย</span>
       </div>
-      {isForecastYear ? (
-        <>
-          <div className="flex items-center gap-2">
-            <span className="w-5 inline-block" style={{ borderTop: "2.5px solid #f97316", height: "1px" }} />
-            <span className="text-xs font-bold text-slate-500">สถิติจริง · จุดทึบ</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-5 inline-block" style={{ borderTop: "2.5px dashed #8b5cf6", height: "1px" }} />
-            <span className="text-xs font-bold text-purple-600">ค่าประเมิน · จุดกลวง</span>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="flex items-center gap-2">
-            <span className="w-5 inline-block" style={{ borderTop: "2px solid #f97316", height: "1px" }} />
-            <span className="text-xs font-bold text-slate-500">โอกาสเกิดอุทกภัย (%)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded-full bg-red-400 border-2 border-white shadow inline-block" />
-            <span className="text-xs font-bold text-red-600">เดือนที่เลือก (เด่นชัด)</span>
-          </div>
-        </>
-      )}
     </div>
 
     {/* อธิบายวิธีอ่านกราฟ */}
-    <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+    {/* <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
       <p className="text-[11px] font-bold text-slate-600 leading-relaxed">
         {isForecastYear
-          ? `กราฟนี้ดูเดือน${thaiMonthNames[selectedMonth]} เดือนเดียว แต่เทียบข้ามปี · เส้นทึบสีส้มคือสถิติจริงปี ${REAL_DATA_YEARS[0] + 543}-${LAST_REAL_YEAR + 543} ค่าจึงเป็น 100% (เกิดอุทกภัย) หรือ 0% (ไม่เกิด) เท่านั้น · เส้นประสีม่วงในพื้นที่แรเงาคือค่าประเมินปี ${LAST_REAL_YEAR + 1 + 543}-${LAST_SELECTABLE_YEAR + 543} จุดกลวงหมายถึงยังไม่ใช่ข้อเท็จจริง · ค่าประเมินคำนวณจากสถิติ 5 ปีที่อยู่ทางซ้ายของกราฟ จึงตรวจสอบที่มาได้เอง`
+          ? `กราฟนี้ดูเดือน${thaiMonthNames[selectedMonth]} เดือนเดียว แต่เทียบข้ามปี · เส้นทึบสีส้มคือสถิติจริงปี ${REAL_DATA_YEARS[0] + 543}-${LAST_REAL_YEAR + 543} ค่าจึงเป็น 100% (เกิดอุทกภัย) หรือ 0% (ไม่เกิด) เท่านั้น · เส้นประสีม่วงในพื้นที่แรเงาคือค่าแนวโน้มปี ${LAST_REAL_YEAR + 1 + 543}-${LAST_SELECTABLE_YEAR + 543} จุดกลวงหมายถึงยังไม่ใช่ข้อเท็จจริง · ค่าแนวโน้มคำนวณจากสถิติ 5 ปีที่อยู่ทางซ้ายของกราฟ จึงตรวจสอบที่มาได้เอง`
           : `กราฟนี้ดูปี ${parseInt(selectedYear) + 543} ปีเดียว แต่เทียบข้ามเดือน · แสดง 3 เดือนก่อนและหลังเดือน${thaiMonthNames[selectedMonth]} เพื่อให้เห็นว่าเดือนที่เลือกอยู่ตรงไหนของฤดูน้ำหลาก · จุดสีแดงคือเดือนที่เกิดอุทกภัยจริง`}
       </p>
-    </div>
+    </div> */}
 
     {/* สรุปใต้กราฟ */}
     <p className="text-sm text-slate-600 mt-4 text-center">
       {isForecastYear
-        ? `เทียบข้ามปี · เดือน${thaiMonthNames[selectedMonth]} ที่ ${selectedProvince} ตั้งแต่ พ.ศ. ${REAL_DATA_YEARS[0] + 543} ถึง ${LAST_SELECTABLE_YEAR + 543}`
-        : `เทียบข้ามเดือน · ${selectedProvince} ช่วง ±3 เดือนรอบ${thaiMonthNames[selectedMonth]} พ.ศ. ${parseInt(selectedYear) + 543}`}
+        ? `เดือน${thaiMonthNames[selectedMonth]} จังหวัด ${selectedProvince} ตั้งแต่ พ.ศ. ${REAL_DATA_YEARS[0] + 543} ถึง ${LAST_SELECTABLE_YEAR + 543}`
+        : `${selectedProvince} ช่วง ±3 เดือนรอบ${thaiMonthNames[selectedMonth]} พ.ศ. ${parseInt(selectedYear) + 543}`}
     </p>
 
   </div>
 </div>
     {/* ── ส่วนแสดงผลการวิเคราะห์เปรียบเทียบ (2 คอลัมน์) ── */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-    {/* คอลัมน์ซ้าย: พฤติกรรมการค้นหา */}
-    <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-    <div className="px-6 py-5 border-b border-slate-100 bg-slate-50 flex items-center gap-4">
-    <div className="p-2 rounded-lg bg-sky-700 shadow-sm text-white flex">
-    <HubIcon fontSize="small" />
-  </div>
-    <div>
-    <h3 className="text-slate-800 font-bold tracking-tight leading-none text-base">
-    พฤติกรรมการค้นหา เทียบกับสถานการณ์จริง
-  </h3>
-    <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-wider">
-    {selectedProvince} · {thaiMonthNames[selectedMonth]} {parseInt(selectedYear) + 543}
-  </p>
-  </div>
-  </div>
-    {graphData.nodes.length > 0 && (
-        <div className="border-b border-slate-100">
-        <ForceGraph2D
-        graphData={graphData}
-        height={260}
-        nodeLabel="id"
-        nodeAutoColorBy="group"
-        linkDirectionalArrowLength={5}
-        linkDirectionalArrowRelPos={1}
-        nodeCanvasObject={nodeCanvasObject}
-        />
-      </div>
-    )}
+<div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+      <div className="px-6 py-5 border-b border-slate-100 bg-slate-50 flex flex-col gap-3">
+        {/* 1. ส่วนหัวข้อ */}
+        <div className="flex items-center gap-4">
+          <div className="p-2 rounded-lg bg-sky-700 shadow-sm text-white flex">
+            <HubIcon fontSize="small" />
+          </div>
+          <div>
+            <h3 className="text-slate-800 font-bold tracking-tight leading-none text-base">
+              พฤติกรรมการค้นหาจาก Google Trends เทียบกับสถานการณ์จริง
+            </h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-wider">
+              {selectedProvince} · {thaiMonthNames[selectedMonth]} {parseInt(selectedYear) + 543}
+            </p>
+          </div>
+        </div>
 
-    <div className="flex-1 overflow-y-auto max-h-[350px]">
+        
+        
+        {graphData.nodes.length > 0 && (
+          <div className="flex flex-wrap items-center gap-4 pt-3 mt-1 border-t border-slate-200/60">
+            <div className="flex items-center gap-2">
+              {/* จุดสีส้มสำหรับจุดตั้งต้น */}
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-tight">
+                {/* เดิมเช็คคำว่า "ฝนตกหนัก" แต่ node จริงถูกแปลเป็น "Rain_Heavy" (อังกฤษ)
+                    เงื่อนไขนี้จึงไม่เคยเป็นจริงเลย แก้ให้เช็คคำที่ถูกต้อง */}
+                {graphData.nodes.some(n => n.group === "cause" && n.id === "Rain_Heavy")
+                  ? "เกิดเหตุการณ์ฝนตกหนัก พร้อมมีการค้นหาคำเหล่านี้"
+                  : "มีการค้นหาคำเหล่านี้"}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
+              {/* จุดสีฟ้าสำหรับผลลัพธ์ที่ตามมา — เดิมเขียนตายตัวว่าเป็นคำค้นหาเสมอ
+                  ทั้งที่บางกฎ Rain_Heavy ก็ตามมาทีหลังได้เหมือนกัน (ไม่ใช่แค่เป็นจุดเริ่ม) */}
+              <div className="w-2.5 h-2.5 rounded-full bg-sky-500 animate-pulse" />
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-tight">
+                {graphData.nodes.some(n => n.group === "effect" && n.id === "Rain_Heavy")
+                  ? "มักเกิดเหตุการณ์ฝนตกหนักตามมา"
+                  : "มักตามมาด้วยการค้นหาคำนี้"}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+
+
+      {graphData.nodes.length > 0 && (
+        <div className="border-b border-slate-100 h-[260px] bg-[#fafcff] flex justify-center items-center relative overflow-hidden">
+          <div className="cursor-grab active:cursor-grabbing w-full flex justify-center items-center">
+            <ForceGraph2D
+              graphData={graphData}
+              nodeColor={(node) =>
+                node.group === "cause" ? "#F59E0B" : "#0EA5E9"
+              }
+              nodeVal="val"
+              linkDirectionalParticles={2}
+              height={260}
+              nodeCanvasObject={(node, ctx, globalScale) => {
+                const label = node.id;
+                const fontSize = 14 / globalScale;
+                ctx.font = `${fontSize}px Arial`;
+                ctx.textAlign = "center";
+                ctx.fillStyle = "#334155";
+                ctx.fillText(label, node.x, node.y + 12);
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI, false);
+                ctx.fillStyle =
+                  node.group === "cause" ? "#F59E0B" : "#0EA5E9";
+                ctx.fill();
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      
+      <div className="flex flex-col gap-2 px-5 py-3 border-b border-slate-100">
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            เกณฑ์ขั้นต่ำในการคัดกรองรูปแบบความสัมพันธ์
+          </label>
+          <span className="text-[11px] font-bold text-slate-400">
+            {ruleCountInfo.shown}/{ruleCountInfo.total} รูปแบบ
+          </span>
+        </div>
+        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 transition-all focus-within:bg-white focus-within:border-sky-500 focus-within:ring-2 ring-sky-100 w-fit">
+          <select
+            value={confidenceThreshold}
+            onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
+            className="bg-transparent py-2.5 pr-8 text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer"
+          >
+            <option value={0}>ทั้งหมด</option>
+            <option value={0.1}>≥10%</option>
+            <option value={0.3}>≥30%</option>
+            <option value={0.5}>≥50%</option>
+          </select>
+          <svg className="w-4 h-4 text-slate-400 -ml-6 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+          </svg>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto max-h-[350px]">
     {!isForecastYear ? (
-        currentRules.length > 0 ? (
+        currentRules.filter((rule) => (rule.confidence || 0) >= confidenceThreshold).length > 0 ? (
           <div className="divide-y divide-slate-100">
-          {currentRules.map((rule, i) => {
+          {currentRules.filter((rule) => (rule.confidence || 0) >= confidenceThreshold).map((rule, i) => {
                 const antecedentLabels = asArray(rule.antecedents).map(translateWord);
                 return (
                   <div key={i} className="flex flex-col gap-3 p-5">
@@ -1262,39 +1326,52 @@ const monthWindowData = useMemo(() => {
         ) : (
           <div className="p-8 flex flex-col items-center justify-center gap-3 text-center">
           <HubIcon className="text-slate-200" sx={{ fontSize: 40 }} />
-          <p className="text-slate-500 font-bold text-sm">ไม่พบรูปแบบความสัมพันธ์ของคำค้นหาในเดือนนี้</p>
+          <p className="text-slate-500 font-bold text-sm">
+            {currentRules.length > 0 ? "ไม่มีกฎที่ผ่านเกณฑ์ความมั่นใจที่เลือกไว้" : "ไม่พบรูปแบบความสัมพันธ์ของคำค้นหาในเดือนนี้"}
+          </p>
         </div>
         )
-      ) : forecastRules.length > 0 ? (
+      ) : pendingRules.filter((rule) => (rule.confidence || 0) >= confidenceThreshold).length > 0 ? (
         <div className="divide-y divide-slate-100">
-        {forecastRules.map((rule, i) => (
-              <div key={i} className="flex flex-col gap-3 p-5">
-              <div className="flex flex-col gap-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">คำค้นหาที่ผ่านเกณฑ์</span>
-              <div className="flex flex-wrap gap-2">
-              {rule.checks.map((c, idx) => (
-                    <span key={idx} className="px-3 py-1.5 rounded-xl text-xs font-bold border bg-orange-50 text-orange-700 border-orange-200">
-                    {c.label} ✓
-                  </span>
-              ))}
-            </div>
-            </div>
-              <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-400">
-              เข้าเงื่อนไข {rule.metCount}/{rule.totalConditions}
-            </span>
-              <div className="px-3 py-2 rounded-xl border text-xs font-bold ml-auto bg-amber-50 border-amber-200 text-amber-600">
-              ตรงกับรูปแบบความเสี่ยง
-            </div>
-            </div>
-            </div>
-        ))}
+        {pendingRules.filter((rule) => (rule.confidence || 0) >= confidenceThreshold).map((rule, i) => {
+              const antecedentLabels = asArray(rule.antecedents).map(translateWord);
+              const consequentLabels = asArray(rule.consequents).map(translateWord);
+              return (
+                <div key={i} className="flex flex-col gap-3 p-5">
+                <div className="flex flex-col gap-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">รูปแบบที่ตรงกับข้อมูลจริง</span>
+                <div className="flex flex-wrap gap-2">
+                {antecedentLabels.map((label, idx) => (
+                      <span key={idx} className="px-3 py-1.5 bg-orange-50 text-orange-700 rounded-xl text-xs font-bold border border-orange-100">
+                      {label}
+                    </span>
+                ))}
+              </div>
+              </div>
+                <div className="flex items-center gap-2">
+                <ArrowBackIcon className="text-slate-300 rotate-[-90deg]" fontSize="small" />
+                <div className="flex flex-wrap gap-2">
+                {consequentLabels.map((label, idx) => (
+                      <span key={idx} className="px-3 py-1.5 bg-sky-50 text-sky-700 rounded-xl text-xs font-bold border border-sky-100">
+                      {label}
+                    </span>
+                ))}
+              </div>
+                <span className="text-xs font-bold text-green-600 ml-auto shrink-0">
+                {Math.round((rule.confidence || 0) * 100)}%
+              </span>
+              </div>
+              </div>
+              );
+        })}
       </div>
       ) : (
-        <div className="p-8 flex flex-col items-center justify-center gap-3 text-center">
-        <TimelineIcon className="text-slate-200" sx={{ fontSize: 40 }} />
-        <p className="text-slate-500 font-bold text-sm">ไม่พบรูปแบบการค้นหาที่เข้าเงื่อนไขความเสี่ยงในปีนี้</p>
-      </div>
+        <div className="w-full min-h-[250px] p-8 flex flex-col items-center justify-center gap-3 text-center">
+          <TimelineIcon className="text-slate-200" sx={{ fontSize: 40 }} />
+          <p className="text-slate-500 font-bold text-sm">
+            {pendingRules.length > 0 ? "ไม่มีกฎที่ผ่านเกณฑ์ความมั่นใจที่เลือกไว้" : "ไม่พบรูปแบบที่ตรงกับข้อมูลจริงในเดือนนี้"}
+          </p>
+        </div>
     )}
   </div>
   </div>
@@ -1383,7 +1460,7 @@ const monthWindowData = useMemo(() => {
         <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl text-orange-800 flex items-start gap-2">
         <AutoGraphIcon className="text-orange-600 shrink-0 mt-0.5" fontSize="small" />
         <span>
-        ประเมิน พ.ศ. {parseInt(selectedYear) + 543}: มีโอกาสเกิดอุทกภัย {Math.round(prediction.chance * 100)}% · {prediction.label}
+        แนวโน้มที่จะเกิดขึ้นในเดือน {thaiMonthNames[selectedMonth]} พ.ศ. {parseInt(selectedYear) + 543}: มีโอกาสเกิดอุทกภัย {Math.round(prediction.chance * 100)}% · {prediction.label}
         {prediction.neighbors.length > 0 && ` · ใกล้เคียงกับ พ.ศ. ${prediction.neighbors[0].year + 543} มากที่สุด`}
       </span>
       </div>
@@ -1391,7 +1468,7 @@ const monthWindowData = useMemo(() => {
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 flex items-start gap-2">
         <VerifiedIcon className="text-emerald-600 shrink-0 mt-0.5" fontSize="small" />
         <span>
-        ประเมิน พ.ศ. {parseInt(selectedYear) + 543}: มีโอกาสเกิดอุทกภัย {Math.round(prediction.chance * 100)}% · {prediction.label}
+        แนวโน้มที่จะเกิดขึ้นในเดือน {thaiMonthNames[selectedMonth]} พ.ศ. {parseInt(selectedYear) + 543}: มีโอกาสเกิดอุทกภัย {Math.round(prediction.chance * 100)}% · {prediction.label}
         {prediction.neighbors.length > 0 && ` · ใกล้เคียงกับ พ.ศ. ${prediction.neighbors[0].year + 543} มากที่สุด`}
       </span>
       </div>

@@ -5,7 +5,7 @@ import FloodSearchPatterns from '@/components/FloodSearchPatterns';
 
 import { getRainfallData } from '@/lib/data/rainfall';
 import { getFloodData } from '@/lib/data/flood';
-import { getAssociationRules } from '@/lib/data/rules';
+import { getAssociationRules,} from '@/lib/data/rules';
 import { getSearchTrends } from '@/lib/data/trends';
 
 
@@ -57,12 +57,7 @@ export default async function PatternPage() {
           <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight leading-tight">
             ความเสี่ยงอุทกภัยรายเดือน
           </h1>
-          <p className="text-slate-500 text-[15px] leading-relaxed">
-            ประเมินโอกาสเกิดอุทกภัยของแต่ละจังหวัด โดยเทียบรูปแบบของเดือนที่เลือก
-            กับเดือนเดียวกันในปีที่มีสถิติยืนยันแล้ว
-          </p>
 
-          {/* บอกแหล่งข้อมูลและช่วงปี เพราะแต่ละแหล่งครอบคลุมไม่เท่ากัน */}
           <div className="flex flex-wrap gap-2 mt-1">
             <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">
               สถิติอุทกภัย · 2563–2567
@@ -71,7 +66,7 @@ export default async function PatternPage() {
               ปริมาณน้ำฝน · 2561–2569
             </span>
             <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">
-              Google Trends · 2561–2568
+              Google Trends · 2561–2569
             </span>
           </div>
         </div>

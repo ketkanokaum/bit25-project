@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect} from 'react';
 import RainfallChart from './RainfallChart';
+import { percentOfNormal, classifyRainLevel, RAIN_LEVELS } from '@/lib/data/rainlevel';
 
 
 
@@ -32,30 +33,18 @@ const provinceRegions = {
 
 const regionOrder = ["ภาคเหนือ", "ภาคตะวันออกเฉียงเหนือ", "ภาคกลาง", "ภาคตะวันออก", "ภาคตะวันตก", "ภาคใต้"]; // ลำดับการแสดงภาค
 
-const legendItems = [
-  { label: 'ต่ำกว่าปกติมาก (< 50%)',  color: '#059669', bg: '#ecfdf5', border: '#a7f3d0', dot: '#10b981' }, // เขียวอมฟ้า
-  { label: 'ต่ำกว่าปกติ (50 - 80%)',    color: '#15803d', bg: '#f0fdf4', border: '#86efac', dot: '#22c55e' }, // เขียว
-  { label: 'ใกล้เคียงปกติ (80 - 120%)', color: '#a16207', bg: '#fefce8', border: '#fde047', dot: '#eab308' }, // เหลืองทอง
-  { label: 'สูงกว่าปกติ (120 - 150%)',  color: '#c2410c', bg: '#fff7ed', border: '#fdba74', dot: '#f97316' }, // ส้ม
-  { label: 'สูงกว่าปกติมาก (> 150%)',  color: '#b91c1c', bg: '#fef2f2', border: '#fca5a5', dot: '#ef4444' }, // แดง
-];
+const legendItems = RAIN_LEVELS.map((lvl) => ({
+  label: `${lvl.label} ${lvl.range}`,
+  color: lvl.hex.color,
+  bg: lvl.hex.bg,
+  border: lvl.hex.border,
+  dot: lvl.hex.dot,
+}));
 
-const getRainRiskStyleTailwind = (amount, baseline) => { 
-  //
-  // ถ้าปริมาณฝนน้อยกว่า 90 มม.
-  if (amount < 90.0) {
-    return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' };
-  }
-
-  //  ถ้าฝนเกิน 90 มม. ค่อยมาคำนวณความผิดปกติ (%) ต่อ
-  let safeBaseline = (baseline && baseline > 0) ? baseline : ((amount && amount > 0) ? amount : 1);
-  const ratio = (amount / safeBaseline) * 100; 
-  if (ratio > 150.0)  return { bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200'    };
-  if (ratio >= 120.0) return { bg: 'bg-orange-50',  text: 'text-orange-700', border: 'border-orange-200' };
-  if (ratio >= 80.0)  return { bg: 'bg-yellow-50',  text: 'text-yellow-700', border: 'border-yellow-200' };
-  if (ratio >= 50.0)  return { bg: 'bg-green-50',   text: 'text-green-700',  border: 'border-green-200'  };
-  
-  return { bg: 'bg-slate-100',  text: 'text-slate-500',  border: 'border-slate-200'  };
+const getRainRiskStyleTailwind = (amount, baseline) => {
+  const safeBaseline = (baseline && baseline > 0) ? baseline : ((amount && amount > 0) ? amount : 1);
+  const percent = percentOfNormal(amount, safeBaseline);
+  return classifyRainLevel(percent).tw;
 };
 
 const RainBar = ({ amount, baseline }) => { // แสดงตัวเลขปริมาณฝนพร้อมสีพื้นหลังตามระดับ
