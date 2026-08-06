@@ -1,6 +1,6 @@
-import { getRainfallWithImpact } from '@/lib/data/rainfall';
+import { getRainfallData } from '@/lib/data/rainfall';
 
 export async function GET() {
-  const data = await getRainfallWithImpact();
+  const data = await getRainfallData();
   return Response.json(data);
 }
