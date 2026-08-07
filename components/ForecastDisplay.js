@@ -395,7 +395,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                   dataKey="forecastRange"
                   name="ค่าอาจคลาดเคลื่อนอยู่ในช่วงนี้"
                   stroke="none"
-                  fill="#8b5cf6"
+                  fill="#c4b5fd"
                   fillOpacity={0.12}
                   connectNulls={true}
                 />
