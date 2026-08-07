@@ -1,4 +1,3 @@
-// components/ForecastDisplay.js
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -18,23 +17,51 @@ const THAI_MONTHS_SHORT = [
   'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
 ];
 
+function tooltipFormatter(value, name) {
+  if (name === 'ปริมาณฝนจริง') {
+    if (value == null) return ['-', name];
+    return [`${value} มม.`, name];
+  }
+  if (name === 'ปริมาณฝนพยากรณ์') {
+    if (value == null) return ['-', name];
+    return [`${value} มม.`, name];
+  }
+  if (name === 'ค่าอาจคลาดเคลื่อนอยู่ในช่วงนี้') {
+    if (!Array.isArray(value)) return ['-', name];
+    return [`${value[0].toFixed(1)}–${value[1].toFixed(1)} มม.`, name];
+  }
+  return [value, name];
+}
+
 export default function ForecastDisplay({ initialProvince, forecastRows, actualRows }) {
   const [selectedProvince, setSelectedProvince] = useState(initialProvince);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // รายชื่อจังหวัดที่มีข้อมูลพยากรณ์ ได้จากข้อมูลที่โหลดมาแล้ว ไม่ query ซ้ำ
   const provinces = useMemo(() => {
-    return [...new Set(forecastRows.map((r) => r.province))].sort();
+    const uniqueProvinces = [];
+    for (let i = 0; i < forecastRows.length; i++) {
+      const province = forecastRows[i].province;
+      if (uniqueProvinces.includes(province) === false) {
+        uniqueProvinces.push(province);
+      }
+    }
+    uniqueProvinces.sort();
+    return uniqueProvinces;
   }, [forecastRows]);
 
-  // กรองรายชื่อจังหวัดในกล่องเลือกตามคำที่พิมพ์ในช่องค้นหา
   const filteredProvinces = useMemo(() => {
-    const q = searchQuery.trim();
-    if (q === '') return provinces;
-    return provinces.filter((p) => p.includes(q));
+    const query = searchQuery.trim();
+    if (query === '') return provinces;
+
+    const result = [];
+    for (let i = 0; i < provinces.length; i++) {
+      if (provinces[i].includes(query)) {
+        result.push(provinces[i]);
+      }
+    }
+    return result;
   }, [provinces, searchQuery]);
 
-  // ถ้าพิมพ์แล้วจังหวัดที่เลือกอยู่ไม่อยู่ในผลค้นหา ให้เลือกตัวแรกที่เจอแทน
   useEffect(() => {
     if (filteredProvinces.length === 0) return;
     if (!filteredProvinces.includes(selectedProvince)) {
@@ -42,98 +69,228 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     }
   }, [filteredProvinces, selectedProvince]);
 
-  // กรองข้อมูลของจังหวัดที่เลือกจากก้อนที่โหลดมาทั้งหมด (เหมือน FloodSearchPatterns)
   const data = useMemo(() => {
-    const myForecast = forecastRows.filter((r) => r.province === selectedProvince);
+    const myForecast = [];
+    for (let i = 0; i < forecastRows.length; i++) {
+      if (forecastRows[i].province === selectedProvince) {
+        myForecast.push(forecastRows[i]);
+      }
+    }
     if (myForecast.length === 0) return null;
+
     const year = myForecast[0].year;
-    const myActual = actualRows.filter((r) => r.province === selectedProvince && r.year === year);
+
+    const myActual = [];
+    for (let i = 0; i < actualRows.length; i++) {
+      const row = actualRows[i];
+      if (row.province === selectedProvince && row.year === year) {
+        myActual.push(row);
+      }
+    }
+
     return { province: selectedProvince, year, actual: myActual, forecast: myForecast };
   }, [forecastRows, actualRows, selectedProvince]);
 
-const highlightForecast = useMemo(() => {
-  if (!data?.forecast?.length) return null;
-  // เลือกเดือนที่ไกลที่สุดในปฏิทิน (ไม่ใช่เวลาที่คำนวณ) เพราะถ้าพยากรณ์
-  // หลายเดือนมาจากการรันครั้งเดียวกัน generated_at จะเท่ากันหมด เรียงตาม
-  // เวลาจะได้ผลเสมอกันแล้วตกไปที่เดือนแรกในลำดับฐานข้อมูลแทน
-  return [...data.forecast].sort(
-    (a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month)
-  )[0];
-}, [data]);
+  const highlightForecast = useMemo(() => {
+    if (!data || !data.forecast || data.forecast.length === 0) return null;
 
-  const highlightPercent = highlightForecast
-    ? percentOfNormal(highlightForecast.predicted_rain, highlightForecast.baseline_mean)
-    : null;
+    let latest = data.forecast[0];
+    let latestKey = latest.year * 12 + latest.month;
+    for (let i = 1; i < data.forecast.length; i++) {
+      const current = data.forecast[i];
+      const currentKey = current.year * 12 + current.month;
+      if (currentKey > latestKey) {
+        latest = current;
+        latestKey = currentKey;
+      }
+    }
+    return latest;
+  }, [data]);
+
+  let highlightPercent = null;
+  if (highlightForecast) {
+    highlightPercent = percentOfNormal(highlightForecast.predicted_rain, highlightForecast.baseline_mean);
+  }
   const highlightTier = classifyRainLevel(highlightPercent);
   const highlightStyle = highlightTier.tw;
 
-  // รวมข้อมูลจริง + พยากรณ์ เป็นกราฟเดียว แสดงแค่ถึงเดือนพยากรณ์ล่าสุด ไม่ยืดไป ธ.ค.
   const chartData = useMemo(() => {
     if (!data) return [];
-    const actualByMonth = new Map(data.actual.map((r) => [r.month, r]));
-    const forecastByMonth = new Map(data.forecast.map((r) => [r.month, r]));
 
-    const lastForecastMonth = Math.max(...data.forecast.map((r) => r.month));
-    const lastActualMonth = data.actual.length > 0
-      ? Math.max(...data.actual.map((r) => r.month))
-      : 0;
+    const actualByMonth = {};
+    for (let i = 0; i < data.actual.length; i++) {
+      actualByMonth[data.actual[i].month] = data.actual[i];
+    }
 
-    const months = Array.from({ length: lastForecastMonth }, (_, i) => i + 1);
+    const forecastByMonth = {};
+    for (let i = 0; i < data.forecast.length; i++) {
+      forecastByMonth[data.forecast[i].month] = data.forecast[i];
+    }
 
-    return months.map((month) => {
-      const a = actualByMonth.get(month);
-      const f = forecastByMonth.get(month);
-      // ต่อสะพาน: เส้นเชื่อมภาพระหว่างจุดสุดท้ายของข้อมูลจริงกับจุดแรกของพยากรณ์
-      // แยก field ต่างหากจาก 'forecast' เด็ดขาด เพื่อไม่ให้ Tooltip อ่านค่านี้
-      // เป็นค่าพยากรณ์จริงตอนชี้ที่เดือนสะพาน (เคยทำให้เข้าใจผิดว่าเดือนนั้นถูกพยากรณ์ด้วย)
-      const isBridge = month === lastActualMonth && lastActualMonth < lastForecastMonth;
-      const firstForecastMonth = Math.min(...data.forecast.map((r) => r.month));
+    let lastForecastMonth = data.forecast[0].month;
+    for (let i = 1; i < data.forecast.length; i++) {
+      if (data.forecast[i].month > lastForecastMonth) {
+        lastForecastMonth = data.forecast[i].month;
+      }
+    }
+
+    let firstForecastMonth = data.forecast[0].month;
+    for (let i = 1; i < data.forecast.length; i++) {
+      if (data.forecast[i].month < firstForecastMonth) {
+        firstForecastMonth = data.forecast[i].month;
+      }
+    }
+
+    let lastActualMonth = 0;
+    for (let i = 0; i < data.actual.length; i++) {
+      if (data.actual[i].month > lastActualMonth) {
+        lastActualMonth = data.actual[i].month;
+      }
+    }
+
+    const months = [];
+    for (let month = 1; month <= lastForecastMonth; month++) {
+      months.push(month);
+    }
+
+    const result = [];
+    for (let i = 0; i < months.length; i++) {
+      const month = months[i];
+      const actualRow = actualByMonth[month];
+      const forecastRow = forecastByMonth[month];
+
+      let isBridge = false;
+      if (month === lastActualMonth && lastActualMonth < lastForecastMonth) {
+        isBridge = true;
+      }
       const isBridgeSegment = isBridge || month === firstForecastMonth;
 
-      return {
+      let actualValue = null;
+      if (actualRow) {
+        actualValue = Number(actualRow.average_rain);
+      }
+
+      let forecastValue = null;
+      if (forecastRow) {
+        forecastValue = Number(forecastRow.predicted_rain);
+      }
+
+      let connectorValue = null;
+      if (isBridgeSegment) {
+        if (forecastRow) {
+          connectorValue = Number(forecastRow.predicted_rain);
+        } else if (actualRow) {
+          connectorValue = Number(actualRow.average_rain);
+        }
+      }
+
+      let forecastRange = null;
+      if (forecastRow) {
+        forecastRange = [Number(forecastRow.predicted_rain_lower), Number(forecastRow.predicted_rain_upper)];
+      }
+
+      let horizon = null;
+      if (forecastRow) {
+        horizon = forecastRow.horizon_months;
+      }
+
+      result.push({
         month,
         label: THAI_MONTHS_SHORT[month - 1],
-        actual: a ? Number(a.average_rain) : null,
-        forecast: f ? Number(f.predicted_rain) : null,
-        connector: isBridgeSegment
-          ? (f ? Number(f.predicted_rain) : (a ? Number(a.average_rain) : null))
-          : null,
-        // ช่วงความเชื่อมั่น: เริ่มจากเดือนที่มีพยากรณ์จริงเท่านั้น ไม่ยืดไปถึงจุดสะพาน
-        forecastRange: f ? [Number(f.predicted_rain_lower), Number(f.predicted_rain_upper)] : null,
-        horizon: f ? f.horizon_months : null,
-      };
-    });
+        actual: actualValue,
+        forecast: forecastValue,
+        connector: connectorValue,
+        forecastRange,
+        horizon,
+      });
+    }
+
+    return result;
   }, [data]);
 
-  // เดือนที่มีทั้งข้อมูลจริงและค่าพยากรณ์พร้อมกัน (พยากรณ์ไว้ล่วงหน้า แล้วภายหลังมีข้อมูลจริงมายืนยัน)
-  // ใช้ตรวจว่าพยากรณ์ "ตรงระดับ" กับความจริงหรือไม่ ตามดัชนีร้อยละของค่าปกติ
   const verifiedMonths = useMemo(() => {
     if (!data) return [];
-    const actualByMonth = new Map(data.actual.map((r) => [r.month, r]));
-    return data.forecast
-      .filter((f) => actualByMonth.has(f.month))
-      .map((f) => {
-        const a = actualByMonth.get(f.month);
-        const actualPct = percentOfNormal(Number(a.average_rain), a.baseline_mean);
-        const forecastPct = percentOfNormal(Number(f.predicted_rain), f.baseline_mean);
-        const actualTier = classifyRainLevel(actualPct);
-        const forecastTier = classifyRainLevel(forecastPct);
-        return {
-          month: f.month,
-          label: THAI_MONTHS_SHORT[f.month - 1],
-          actualLabel: actualTier.label,
-          forecastLabel: forecastTier.label,
-          actualPercent: actualPct,
-          forecastPercent: forecastPct,
-          matched: actualTier.tier === forecastTier.tier,
-        };
+
+    const actualByMonth = {};
+    for (let i = 0; i < data.actual.length; i++) {
+      actualByMonth[data.actual[i].month] = data.actual[i];
+    }
+
+    const result = [];
+    for (let i = 0; i < data.forecast.length; i++) {
+      const forecastRow = data.forecast[i];
+      const actualRow = actualByMonth[forecastRow.month];
+      if (!actualRow) continue;
+
+      const actualPct = percentOfNormal(Number(actualRow.average_rain), actualRow.baseline_mean);
+      const forecastPct = percentOfNormal(Number(forecastRow.predicted_rain), forecastRow.baseline_mean);
+      const actualTier = classifyRainLevel(actualPct);
+      const forecastTier = classifyRainLevel(forecastPct);
+
+      result.push({
+        month: forecastRow.month,
+        label: THAI_MONTHS_SHORT[forecastRow.month - 1],
+        actualLabel: actualTier.label,
+        forecastLabel: forecastTier.label,
+        actualPercent: actualPct,
+        forecastPercent: forecastPct,
+        matched: actualTier.tier === forecastTier.tier,
       });
+    }
+    return result;
   }, [data]);
+
+  const provinceOptions = [];
+  for (let i = 0; i < filteredProvinces.length; i++) {
+    const province = filteredProvinces[i];
+    provinceOptions.push(
+      <option key={province} value={province}>{province}</option>
+    );
+  }
+
+  const verifiedRows = [];
+  for (let i = 0; i < verifiedMonths.length; i++) {
+    const v = verifiedMonths[i];
+
+    let badgeClass = 'text-[11px] font-bold px-2.5 py-1 rounded-full ';
+    let badgeLabel;
+    if (v.matched) {
+      badgeClass += 'bg-emerald-100 text-emerald-700';
+      badgeLabel = 'ระดับตรงกัน';
+    } else {
+      badgeClass += 'bg-red-100 text-red-700';
+      badgeLabel = 'ระดับไม่ตรงกัน';
+    }
+
+    let forecastPercentText = '';
+    if (v.forecastPercent != null) {
+      forecastPercentText = ` (${v.forecastPercent.toFixed(0)}%)`;
+    }
+
+    let actualPercentText = '';
+    if (v.actualPercent != null) {
+      actualPercentText = ` (${v.actualPercent.toFixed(0)}%)`;
+    }
+
+    verifiedRows.push(
+      <div key={v.month} className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl">
+        <span className="text-xs font-bold text-slate-600 w-16">{v.label}</span>
+        <span className="text-xs text-slate-500 flex-1">
+          พยากรณ์: {v.forecastLabel}
+          {forecastPercentText}
+          {" · "}จริง: {v.actualLabel}
+          {actualPercentText}
+        </span>
+        <span className={badgeClass}>
+          {badgeLabel}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
 
-      {/* เลือกจังหวัด */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-3.5 bg-sky-700">
           <div className="p-2 rounded-lg bg-white/15 flex items-center justify-center shadow-sm flex-shrink-0">
@@ -180,7 +337,7 @@ const highlightForecast = useMemo(() => {
                 onChange={(e) => { setSelectedProvince(e.target.value); setSearchQuery(''); }}
                 className="flex-1 bg-transparent py-3 text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer w-full"
               >
-                {filteredProvinces.map((p) => <option key={p} value={p}>{p}</option>)}
+                {provinceOptions}
               </select>
               <svg className="w-4 h-4 text-slate-400 ml-2" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
@@ -197,7 +354,6 @@ const highlightForecast = useMemo(() => {
         </div>
       ) : (
         <>
-          {/* การ์ดผลพยากรณ์หลัก */}
           {highlightForecast && (
             <div className={`rounded-2xl border shadow-sm overflow-hidden ${highlightStyle.border}`}>
               <div className={`px-6 py-5 ${highlightStyle.bg}`}>
@@ -217,11 +373,10 @@ const highlightForecast = useMemo(() => {
                   </span>
                 </div>
               </div>
-              
+
             </div>
           )}
 
-          {/* กราฟฝนจริงเทียบพยากรณ์ทั้งปี */}
           <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
             <h3 className="text-slate-800 font-bold text-sm mb-1">
               ปริมาณน้ำฝนรายเดือน {data.province} — ปี {data.year + 543}
@@ -233,20 +388,9 @@ const highlightForecast = useMemo(() => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} />
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} label={{ value: 'มม.', angle: -90, position: 'insideLeft', fontSize: 11 }} />
-              <Tooltip
-                formatter={(value, name) => {
-                    if (name === 'ปริมาณฝนจริง') return value == null ? ['-', name] : [`${value} มม.`, name];
-                    if (name === 'ปริมาณฝนพยากรณ์') return value == null ? ['-', name] : [`${value} มม.`, name];
-                    if (name === 'ค่าอาจคลาดเคลื่อนอยู่ในช่วงนี้') {
-                    if (!Array.isArray(value)) return ['-', name];
-                    return [`${value[0].toFixed(1)}–${value[1].toFixed(1)} มม.`, name];
-                    }
-                    return [value, name];
-                }}
-                />
+                <Tooltip formatter={tooltipFormatter} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
 
-                
                 <Area
                   dataKey="forecastRange"
                   name="ค่าอาจคลาดเคลื่อนอยู่ในช่วงนี้"
@@ -256,7 +400,6 @@ const highlightForecast = useMemo(() => {
                   connectNulls={true}
                 />
 
-                {/* เส้นทึบ: ข้อมูลจริง */}
                 <Line
                   type="monotone"
                   dataKey="actual"
@@ -267,8 +410,6 @@ const highlightForecast = useMemo(() => {
                   connectNulls={false}
                 />
 
-                {/* เส้นเชื่อมภาพ: ต่อจากจุดสุดท้ายของข้อมูลจริงไปจุดแรกของพยากรณ์จริง */}
-                {/* ไม่โผล่ใน Tooltip และ Legend เพราะไม่ใช่ข้อมูล เป็นแค่เส้นสายตา */}
                 <Line
                   type="monotone"
                   dataKey="connector"
@@ -281,7 +422,6 @@ const highlightForecast = useMemo(() => {
                   tooltipType="none"
                 />
 
-                {/* เส้นประ: ค่าพยากรณ์จริงเท่านั้น (ไม่มีค่าที่เดือนสะพานแล้ว) */}
                 <Line
                   type="monotone"
                   dataKey="forecast"
@@ -296,7 +436,6 @@ const highlightForecast = useMemo(() => {
             </ResponsiveContainer>
           </div>
 
-          {/* ตรวจสอบความแม่นยำ: เดือนที่มีทั้งข้อมูลจริงและค่าพยากรณ์ */}
           {verifiedMonths.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
@@ -307,22 +446,7 @@ const highlightForecast = useMemo(() => {
                 </p>
               </div>
               <div className="p-5 space-y-2">
-                {verifiedMonths.map((v) => (
-                  <div key={v.month} className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl">
-                    <span className="text-xs font-bold text-slate-600 w-16">{v.label}</span>
-                    <span className="text-xs text-slate-500 flex-1">
-                      พยากรณ์: {v.forecastLabel}
-                      {v.forecastPercent != null && ` (${v.forecastPercent.toFixed(0)}%)`}
-                      {" · "}จริง: {v.actualLabel}
-                      {v.actualPercent != null && ` (${v.actualPercent.toFixed(0)}%)`}
-                    </span>
-                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                      v.matched ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {v.matched ? 'ระดับตรงกัน' : 'ระดับไม่ตรงกัน'}
-                    </span>
-                  </div>
-                ))}
+                {verifiedRows}
               </div>
             </div>
           )}

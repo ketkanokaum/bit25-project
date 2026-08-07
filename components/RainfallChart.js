@@ -9,7 +9,6 @@ const thaiMonths = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.�
 export default function RainfallChart({ data, selectedProvince, selectedYear }) {
 
     const chartOptions = useMemo(() => {
-        // ── คง Logic IF-ELSE และ FOR LOOP เดิมของคุณเป๊ะๆ ──
         let filteredByProvince = [];
         if (selectedProvince === 'All') {
             filteredByProvince = data;
@@ -63,9 +62,13 @@ export default function RainfallChart({ data, selectedProvince, selectedYear }) 
             });
         }
 
-        let finalSeries = seriesList.length > 0 ? seriesList : [{ name: 'ไม่มีข้อมูล', data: [] }];
+        let finalSeries;
+        if (seriesList.length > 0) {
+            finalSeries = seriesList;
+        } else {
+            finalSeries = [{ name: 'ไม่มีข้อมูล', data: [] }];
+        }
 
-        // ปรับจูนธีมกราฟให้เข้ากับ Tailwind (Slate-theme)
         return {
             chart: {
                 type: 'line',
