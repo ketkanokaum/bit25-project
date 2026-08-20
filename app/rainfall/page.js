@@ -1,12 +1,9 @@
-
 import Navbar from '@/components/Navbar';
 import RainfallTable from '@/components/RainfallTable';
-
 
 import { getRainfallData } from '@/lib/data/rainfall';
 
 export default async function RainfallPage() {
-
   const data = await getRainfallData();
 
   return (
@@ -23,7 +20,6 @@ export default async function RainfallPage() {
           </p>
         </div>
 
-        
         <RainfallTable data={data} />
       </div>
     </div>

@@ -1,13 +1,10 @@
-// app/pattern/page.js
 import Navbar from '@/components/Navbar';
-
 import FloodSearchPatterns from '@/components/FloodSearchPatterns';
 
 import { getRainfallData } from '@/lib/data/rainfall';
 import { getFloodData } from '@/lib/data/flood';
-import { getAssociationRules,} from '@/lib/data/rules';
+import { getAssociationRules } from '@/lib/data/rules';
 import { getSearchTrends } from '@/lib/data/trends';
-
 
 export default async function PatternPage() {
 
@@ -18,21 +15,30 @@ export default async function PatternPage() {
     getSearchTrends(),
   ]);
 
+  const floodByKey = {};
+  for (let i = 0; i < floodList.length; i++) {
+    const item = floodList[i];
+    const key = `${item.province}_${item.year}_${item.month}`;
+    floodByKey[key] = item;
+  }
 
-  // สมมติว่า getFloodData() รวมยอดมาแล้วเป็น 1 แถวต่อ (จังหวัด, ปี, เดือน)
-  // ถ้าคืนมาเป็นรายเหตุการณ์ Map จะเก็บแค่แถวสุดท้าย ต้องรวมยอดก่อน
-  const floodMap = new Map(floodList.map(item => [`${item.province}_${item.year}_${item.month}`, item]));
-  const trendsMap = new Map(trendsList.map(item => [`${item.province}_${item.year}_${item.month}`, item]));
+  const trendByKey = {};
+  for (let i = 0; i < trendsList.length; i++) {
+    const item = trendsList[i];
+    const key = `${item.province}_${item.year}_${item.month}`;
+    trendByKey[key] = item;
+  }
 
-  const combinedData = rainfallList.map((rain) => {
+  // ใช้ ?? แทน || เพราะ "ไม่มีข้อมูล" (เช่น Google Trends ปี 2569 ที่ยังไม่มี)
+  // ต้องแสดงเป็น null ไม่ใช่ 0 (0 แปลว่า "ค้นหา 0 ครั้ง" ซึ่งเป็นคนละความหมายกัน)
+  const combinedData = [];
+  for (let i = 0; i < rainfallList.length; i++) {
+    const rain = rainfallList[i];
     const key = `${rain.province}_${rain.year}_${rain.month}`;
-    const flood = floodMap.get(key) || {};
-    const trend = trendsMap.get(key) || {};
+    const flood = floodByKey[key] || {};
+    const trend = trendByKey[key] || {};
 
-    // ใช้ ?? แทน || เพื่อไม่ให้ "ไม่มีข้อมูล" กลายเป็น 0
-    // สำคัญกับปี 2569 ที่ยังไม่มีข้อมูล Google Trends เลย
-    // ถ้าใช้ || 0 จะดูเหมือนคนไม่ค้นหาอะไรเลย ซึ่งคนละความหมายกับไม่มีข้อมูล
-    return {
+    combinedData.push({
       ...rain,
       affected_people: flood.total_affected ?? null,
       fatalities: flood.total_fatalities ?? null,
@@ -44,8 +50,8 @@ export default async function PatternPage() {
       search_water_level: trend.search_water_level ?? null,
       search_water_situation: trend.search_water_situation ?? null,
       search_evacuate: trend.search_evacuate ?? null,
-    };
-  });
+    });
+  }
 
   return (
     <div className="min-h-screen font-sans">
