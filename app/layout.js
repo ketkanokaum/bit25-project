@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import { Kanit, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,15 +12,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "BIT01 - PROJECT",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }) {
   return (
     /* เอา style สีพื้นหลังออก ให้ globals.css คุมที่เดียว
        จะได้ไม่ต้องแก้หลายที่เวลาเปลี่ยนสี */

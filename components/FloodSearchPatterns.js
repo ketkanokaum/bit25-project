@@ -13,6 +13,20 @@ import EmojiObjectsIcon from "@mui/icons-material/EmojiObjects";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import AutoGraphIcon from "@mui/icons-material/AutoGraph";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
+import { provinceRegions, regionOrder } from "@/lib/constants/provinces";
+import {
+  getDataBoundaries,
+  getAllYears,
+  predictFlood,
+  getFloodEvents,
+  didFloodHappen,
+  getMonthRow,
+  getBaseline,
+  REAL_DATA_YEARS,
+  RULE_BASE_YEARS,
+  LAST_REAL_YEAR,
+  SEARCH_FIELDS,
+} from "@/lib/prediction";
 import {
   LineChart,
   Line,
@@ -33,47 +47,8 @@ const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ),
 });
 
-const provinceRegions = {
-  เชียงราย: "ภาคเหนือ", น่าน: "ภาคเหนือ", พะเยา: "ภาคเหนือ", เชียงใหม่: "ภาคเหนือ", แม่ฮ่องสอน: "ภาคเหนือ", แพร่: "ภาคเหนือ", ลำปาง: "ภาคเหนือ", ลำพูน: "ภาคเหนือ", อุตรดิตถ์: "ภาคเหนือ",
-  กรุงเทพมหานคร: "ภาคกลาง", พิษณุโลก: "ภาคกลาง", สุโขทัย: "ภาคกลาง", เพชรบูรณ์: "ภาคกลาง", พิจิตร: "ภาคกลาง", กำแพงเพชร: "ภาคกลาง", นครสวรรค์: "ภาคกลาง", ลพบุรี: "ภาคกลาง", ชัยนาท: "ภาคกลาง", อุทัยธานี: "ภาคกลาง", สิงห์บุรี: "ภาคกลาง", อ่างทอง: "ภาคกลาง", สระบุรี: "ภาคกลาง", พระนครศรีอยุธยา: "ภาคกลาง", สุพรรณบุรี: "ภาคกลาง", นครนายก: "ภาคกลาง", ปทุมธานี: "ภาคกลาง", นนทบุรี: "ภาคกลาง", นครปฐม: "ภาคกลาง", สมุทรปราการ: "ภาคกลาง", สมุทรสาคร: "ภาคกลาง", สมุทรสงคราม: "ภาคกลาง",
-  หนองคาย: "ภาคตะวันออกเฉียงเหนือ", นครพนม: "ภาคตะวันออกเฉียงเหนือ", สกลนคร: "ภาคตะวันออกเฉียงเหนือ", อุดรธานี: "ภาคตะวันออกเฉียงเหนือ", หนองบัวลำภู: "ภาคตะวันออกเฉียงเหนือ", เลย: "ภาคตะวันออกเฉียงเหนือ", มุกดาหาร: "ภาคตะวันออกเฉียงเหนือ", กาฬสินธุ์: "ภาคตะวันออกเฉียงเหนือ", ขอนแก่น: "ภาคตะวันออกเฉียงเหนือ", อำนาจเจริญ: "ภาคตะวันออกเฉียงเหนือ", ยโสธร: "ภาคตะวันออกเฉียงเหนือ", ร้อยเอ็ด: "ภาคตะวันออกเฉียงเหนือ", มหาสารคาม: "ภาคตะวันออกเฉียงเหนือ", ชัยภูมิ: "ภาคตะวันออกเฉียงเหนือ", นครราชสีมา: "ภาคตะวันออกเฉียงเหนือ", บุรีรัมย์: "ภาคตะวันออกเฉียงเหนือ", สุรินทร์: "ภาคตะวันออกเฉียงเหนือ", ศรีสะเกษ: "ภาคตะวันออกเฉียงเหนือ", อุบลราชธานี: "ภาคตะวันออกเฉียงเหนือ", บึงกาฬ: "ภาคตะวันออกเฉียงเหนือ",
-  สระแก้ว: "ภาคตะวันออก", ปราจีนบุรี: "ภาคตะวันออก", ฉะเชิงเทรา: "ภาคตะวันออก", ชลบุรี: "ภาคตะวันออก", ระยอง: "ภาคตะวันออก", จันทบุรี: "ภาคตะวันออก", ตราด: "ภาคตะวันออก",
-  ตาก: "ภาคตะวันตก", กาญจนบุรี: "ภาคตะวันตก", ราชบุรี: "ภาคตะวันตก", เพชรบุรี: "ภาคตะวันตก", ประจวบคีรีขันธ์: "ภาคตะวันตก",
-  ชุมพร: "ภาคใต้", ระนอง: "ภาคใต้", สุราษฎร์ธานี: "ภาคใต้", นครศรีธรรมราช: "ภาคใต้", กระบี่: "ภาคใต้", พังงา: "ภาคใต้", ภูเก็ต: "ภาคใต้", พัทลุง: "ภาคใต้", ตรัง: "ภาคใต้", ปัตตานี: "ภาคใต้", สงขลา: "ภาคใต้", สตูล: "ภาคใต้", นราธิวาส: "ภาคใต้", ยะลา: "ภาคใต้",
-};
-
-const regionOrder = ["ภาคเหนือ", "ภาคตะวันออกเฉียงเหนือ", "ภาคกลาง", "ภาคตะวันออก", "ภาคตะวันตก", "ภาคใต้"];
 const thaiMonthNames = { 1: "มกราคม", 2: "กุมภาพันธ์", 3: "มีนาคม", 4: "เมษายน", 5: "พฤษภาคม", 6: "มิถุนายน", 7: "กรกฎาคม", 8: "สิงหาคม", 9: "กันยายน", 10: "ตุลาคม", 11: "พฤศจิกายน", 12: "ธันวาคม" };
 const shortMonthNames = { 1: "ม.ค.", 2: "ก.พ.", 3: "มี.ค.", 4: "เม.ย.", 5: "พ.ค.", 6: "มิ.ย.", 7: "ก.ค.", 8: "ส.ค.", 9: "ก.ย.", 10: "ต.ค.", 11: "พ.ย.", 12: "ธ.ค." };
-
-const REAL_DATA_YEARS = [2020, 2021, 2022, 2023, 2024];
-const RULE_BASE_YEARS = REAL_DATA_YEARS;
-
-const SEARCH_END_YEAR = 2026;
-const SEARCH_END_MONTH = 6;
-const RAIN_END_YEAR = 2026;
-const RAIN_END_MONTH = 5;
-
-const LAST_SELECTABLE_YEAR = 2026;
-
-const LAST_REAL_YEAR = REAL_DATA_YEARS[REAL_DATA_YEARS.length - 1];
-
-const ALL_YEARS = [];
-for (let y = REAL_DATA_YEARS[0]; y <= LAST_SELECTABLE_YEAR; y++) {
-  ALL_YEARS.push(y);
-}
-
-const METHOD_CONFIRMED = "confirmed";
-const METHOD_SEARCH_RAIN = "search_rain";
-const METHOD_RAIN_ONLY = "rain_only";
-const METHOD_HISTORY = "history";
-
-const METHOD_LABELS = {
-  [METHOD_CONFIRMED]: "สถิติจริง",
-  [METHOD_SEARCH_RAIN]: "เทียบรูปแบบการค้นหาและปริมาณฝน",
-  [METHOD_RAIN_ONLY]: "เทียบปริมาณฝน (ไม่มีข้อมูลการค้นหาปีนี้)",
-  [METHOD_HISTORY]: "ความถี่ในอดีต (ไม่มีข้อมูลปีนี้)",
-};
 
 function formatThaiDate(dateStr) {
   const d = new Date(dateStr);
@@ -135,254 +110,6 @@ function asArray(x) {
     if (trimmed !== "") result.push(trimmed);
   }
   return result;
-}
-
-function getFloodEvents(data, province, year, month) {
-  const result = [];
-  for (let i = 0; i < data.length; i++) {
-    const r = data[i];
-    if (
-      r.province === province &&
-      parseInt(r.year) === parseInt(year) &&
-      parseInt(r.month) === parseInt(month) &&
-      r.date
-    ) {
-      result.push(r);
-    }
-  }
-  return result;
-}
-
-function didFloodHappen(data, province, year, month) {
-  return getFloodEvents(data, province, year, month).length > 0;
-}
-
-function countFloodYears(data, province, month) {
-  const years = [];
-  for (let i = 0; i < REAL_DATA_YEARS.length; i++) {
-    const y = REAL_DATA_YEARS[i];
-    if (didFloodHappen(data, province, y, month)) years.push(y);
-  }
-  return {
-    years: years,
-    count: years.length,
-    total: REAL_DATA_YEARS.length,
-    rate: years.length / REAL_DATA_YEARS.length,
-  };
-}
-
-function getMonthRow(data, province, year, month) {
-  for (let i = 0; i < data.length; i++) {
-    const r = data[i];
-    if (
-      r.province === province &&
-      parseInt(r.year) === parseInt(year) &&
-      parseInt(r.month) === parseInt(month)
-    ) {
-      return r;
-    }
-  }
-  return null;
-}
-
-function getBaseline(data, province, month) {
-  const rows = [];
-  for (let i = 0; i < data.length; i++) {
-    const r = data[i];
-    if (r.province === province && parseInt(r.month) === parseInt(month)) {
-      rows.push(r);
-    }
-  }
-  if (rows.length === 0) return { value: null, fromTable: false };
-
-  let withBaseline = null;
-  for (let i = 0; i < rows.length; i++) {
-    if (rows[i].baseline_mean != null) {
-      withBaseline = rows[i];
-      break;
-    }
-  }
-  if (withBaseline) {
-    return { value: Math.round(parseFloat(withBaseline.baseline_mean)), fromTable: true };
-  }
-
-  const past = [];
-  for (let i = 0; i < rows.length; i++) {
-    if (RULE_BASE_YEARS.includes(parseInt(rows[i].year))) past.push(rows[i]);
-  }
-  if (past.length === 0) return { value: null, fromTable: false };
-  let sum = 0;
-  for (let i = 0; i < past.length; i++) {
-    sum += parseFloat(past[i].average_rain) || 0;
-  }
-  return { value: Math.round(sum / past.length), fromTable: false };
-}
-
-const SEARCH_FIELDS = [
-  "search_flood",
-  "search_rain",
-  "search_storm",
-  "search_water_level",
-  "search_water_situation",
-  "search_evacuate",
-];
-
-function pickMethod(year, month) {
-  const y = parseInt(year);
-  const m = parseInt(month);
-  if (REAL_DATA_YEARS.includes(y)) return METHOD_CONFIRMED;
-  if (y * 12 + m <= SEARCH_END_YEAR * 12 + SEARCH_END_MONTH) return METHOD_SEARCH_RAIN;
-  if (y * 12 + m <= RAIN_END_YEAR * 12 + RAIN_END_MONTH) return METHOD_RAIN_ONLY;
-  return METHOD_HISTORY;
-}
-
-function makeFeatures(row, useSearch) {
-  if (!row) return null;
-  const list = [];
-  if (useSearch) {
-    for (let i = 0; i < SEARCH_FIELDS.length; i++) {
-      list.push(Number(row[SEARCH_FIELDS[i]]) || 0);
-    }
-  }
-  list.push(Number(row.average_rain) || 0);
-  return list;
-}
-
-function scaleAll(lists) {
-  const size = lists[0].length;
-  const mins = [];
-  const maxs = [];
-  for (let i = 0; i < size; i++) {
-    let lo = Infinity;
-    let hi = -Infinity;
-    for (let j = 0; j < lists.length; j++) {
-      if (lists[j][i] < lo) lo = lists[j][i];
-      if (lists[j][i] > hi) hi = lists[j][i];
-    }
-    mins.push(lo);
-    maxs.push(hi);
-  }
-  const scaled = [];
-  for (let j = 0; j < lists.length; j++) {
-    const row = [];
-    for (let i = 0; i < lists[j].length; i++) {
-      if (maxs[i] === mins[i]) {
-        row.push(0);
-      } else {
-        row.push((lists[j][i] - mins[i]) / (maxs[i] - mins[i]));
-      }
-    }
-    scaled.push(row);
-  }
-  return scaled;
-}
-
-function similarity(a, b) {
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) {
-    sum += (a[i] - b[i]) * (a[i] - b[i]);
-  }
-  return 1 / (1 + Math.sqrt(sum));
-}
-
-function predictFlood(data, province, year, month) {
-  const method = pickMethod(year, month);
-  const history = countFloodYears(data, province, month);
-
-  if (method === METHOD_CONFIRMED) {
-    const events = getFloodEvents(data, province, year, month);
-    return {
-      method: method,
-      label: METHOD_LABELS[method],
-      willFlood: events.length > 0,
-      chance: events.length > 0 ? 1 : 0,
-      neighbors: [],
-      history: history,
-      note: "",
-    };
-  }
-
-  if (method === METHOD_HISTORY) {
-    return {
-      method: method,
-      label: METHOD_LABELS[method],
-      willFlood: history.rate >= 0.5,
-      chance: history.rate,
-      neighbors: [],
-      history: history,
-      note: "ไม่มีข้อมูลฝนและการค้นหาของปีนี้ ผลจึงเท่ากันทุกปีสำหรับเดือนนี้",
-    };
-  }
-
-  const useSearch = method === METHOD_SEARCH_RAIN;
-  const targetRow = getMonthRow(data, province, year, month);
-  const targetFeatures = makeFeatures(targetRow, useSearch);
-
-  const candidates = [];
-  for (let i = 0; i < REAL_DATA_YEARS.length; i++) {
-    const y = REAL_DATA_YEARS[i];
-    const row = getMonthRow(data, province, y, month);
-    const features = makeFeatures(row, useSearch);
-    if (!features) continue;
-    candidates.push({
-      year: y,
-      features: features,
-      flooded: didFloodHappen(data, province, y, month),
-      rain: Math.round(Number(row.average_rain) || 0),
-    });
-  }
-
-  if (!targetFeatures || candidates.length < 2) {
-    return {
-      method: METHOD_HISTORY,
-      label: METHOD_LABELS[METHOD_HISTORY],
-      willFlood: history.rate >= 0.5,
-      chance: history.rate,
-      neighbors: [],
-      history: history,
-      note: "ข้อมูลไม่พอสำหรับเทียบรูปแบบ ใช้ความถี่ในอดีตแทน",
-    };
-  }
-
-  const listsToScale = [targetFeatures];
-  for (let i = 0; i < candidates.length; i++) {
-    listsToScale.push(candidates[i].features);
-  }
-  const scaled = scaleAll(listsToScale);
-
-  const scoredCandidates = [];
-  for (let i = 0; i < candidates.length; i++) {
-    scoredCandidates.push({
-      year: candidates[i].year,
-      flooded: candidates[i].flooded,
-      rain: candidates[i].rain,
-      score: similarity(scaled[0], scaled[i + 1]),
-    });
-  }
-  scoredCandidates.sort((a, b) => b.score - a.score);
-  const neighbors = scoredCandidates.slice(0, 3);
-
-  let floodWeight = 0;
-  let totalWeight = 0;
-  for (let i = 0; i < neighbors.length; i++) {
-    totalWeight += neighbors[i].score;
-    if (neighbors[i].flooded) floodWeight += neighbors[i].score;
-  }
-  let chance = 0;
-  if (totalWeight > 0) chance = floodWeight / totalWeight;
-
-  let note = "";
-  if (!useSearch) note = "ไม่มีข้อมูลการค้นหาของปีนี้ เทียบจากปริมาณฝนอย่างเดียว";
-
-  return {
-    method: method,
-    label: METHOD_LABELS[method],
-    willFlood: chance >= 0.5,
-    chance: chance,
-    neighbors: neighbors,
-    history: history,
-    note: note,
-  };
 }
 
 function nodeCanvasObject(node, ctx, globalScale) {
@@ -470,6 +197,8 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
   const [isClient, setIsClient] = useState(false);
   const data = initialData;
   const rulesArray = Array.isArray(initialRules) ? initialRules : [];
+  const boundaries = useMemo(() => getDataBoundaries(data), [data]);
+  const baseYears = useMemo(() => getAllYears(boundaries.lastSelectableYear), [boundaries]);
   const [selectedProvince, setSelectedProvince] = useState("ขอนแก่น");
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.1);
   const [searchQuery, setSearchQuery] = useState("");
@@ -488,8 +217,8 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       nextYear = currentYear + 1;
     }
 
-    if (nextYear > LAST_SELECTABLE_YEAR) {
-      nextYear = LAST_SELECTABLE_YEAR;
+    if (nextYear > boundaries.lastSelectableYear) {
+      nextYear = boundaries.lastSelectableYear;
       nextMonth = 12;
     }
 
@@ -537,8 +266,8 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
 
   const allYears = useMemo(() => {
     const years = [];
-    for (let i = 0; i < ALL_YEARS.length; i++) {
-      years.push(ALL_YEARS[i]);
+    for (let i = 0; i < baseYears.length; i++) {
+      years.push(baseYears[i]);
     }
     for (let i = 0; i < data.length; i++) {
       const y = parseInt(data[i].year);
@@ -550,13 +279,13 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
     }
     const filteredYears = [];
     for (let i = 0; i < years.length; i++) {
-      if (years[i] >= REAL_DATA_YEARS[0] && years[i] <= LAST_SELECTABLE_YEAR) {
+      if (years[i] >= REAL_DATA_YEARS[0] && years[i] <= boundaries.lastSelectableYear) {
         filteredYears.push(years[i]);
       }
     }
     filteredYears.sort((a, b) => b - a);
     return filteredYears;
-  }, [rulesArray, data]);
+  }, [rulesArray, data, baseYears, boundaries]);
 
   const isForecastYear = !REAL_DATA_YEARS.includes(parseInt(selectedYear));
 
@@ -794,8 +523,8 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
   }, [data, selectedProvince, selectedYear, selectedMonth, isForecastYear]);
 
   const prediction = useMemo(
-    () => predictFlood(data, selectedProvince, selectedYear, selectedMonth),
-    [data, selectedProvince, selectedYear, selectedMonth]
+    () => predictFlood(data, selectedProvince, selectedYear, selectedMonth, boundaries),
+    [data, selectedProvince, selectedYear, selectedMonth, boundaries]
   );
   const floodHistory = prediction.history;
 
@@ -814,11 +543,11 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
 
   const lineChartData = useMemo(() => {
     const result = [];
-    for (let i = 0; i < ALL_YEARS.length; i++) {
-      const y = ALL_YEARS[i];
+    for (let i = 0; i < baseYears.length; i++) {
+      const y = baseYears[i];
       const isForecast = !REAL_DATA_YEARS.includes(y);
       const row = getMonthRow(data, selectedProvince, y, selectedMonth);
-      const predicted = predictFlood(data, selectedProvince, y, selectedMonth);
+      const predicted = predictFlood(data, selectedProvince, y, selectedMonth, boundaries);
       const chancePct = Math.round(predicted.chance * 100);
 
       let rainValue = null;
@@ -840,7 +569,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       });
     }
     return result;
-  }, [selectedProvince, selectedMonth, data]);
+  }, [selectedProvince, selectedMonth, data, baseYears, boundaries]);
 
   const monthWindowData = useMemo(() => {
     if (isForecastYear) return [];
@@ -867,7 +596,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
         affected += parseInt(events[i].affected_people) || 0;
       }
 
-      const monthResult = predictFlood(data, selectedProvince, y, m);
+      const monthResult = predictFlood(data, selectedProvince, y, m, boundaries);
 
       result.push({
         label: `${shortMonthNames[m]} ${String(y + 543).slice(-2)}`,
@@ -881,7 +610,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
     }
 
     return result;
-  }, [isForecastYear, selectedMonth, selectedYear, selectedProvince, data, rulesArray]);
+  }, [isForecastYear, selectedMonth, selectedYear, selectedProvince, data, rulesArray, boundaries]);
 
   const monthOptions = [];
   for (const key in thaiMonthNames) {
@@ -1015,14 +744,14 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
 
   let trendSubtitle;
   if (isForecastYear) {
-    trendSubtitle = `เดือน${thaiMonthNames[selectedMonth]} ปี ${REAL_DATA_YEARS[0] + 543}–${LAST_SELECTABLE_YEAR + 543}`;
+    trendSubtitle = `เดือน${thaiMonthNames[selectedMonth]} ปี ${REAL_DATA_YEARS[0] + 543}–${boundaries.lastSelectableYear + 543}`;
   } else {
     trendSubtitle = `${thaiMonthNames[selectedMonth]} ±3 เดือน · พ.ศ. ${parseInt(selectedYear) + 543}`;
   }
 
   let bottomSummaryText;
   if (isForecastYear) {
-    bottomSummaryText = `เดือน${thaiMonthNames[selectedMonth]} จังหวัด ${selectedProvince} ตั้งแต่ พ.ศ. ${REAL_DATA_YEARS[0] + 543} ถึง ${LAST_SELECTABLE_YEAR + 543}`;
+    bottomSummaryText = `เดือน${thaiMonthNames[selectedMonth]} จังหวัด ${selectedProvince} ตั้งแต่ พ.ศ. ${REAL_DATA_YEARS[0] + 543} ถึง ${boundaries.lastSelectableYear + 543}`;
   } else {
     bottomSummaryText = `${selectedProvince} ช่วง ±3 เดือนรอบ${thaiMonthNames[selectedMonth]} พ.ศ. ${parseInt(selectedYear) + 543}`;
   }
@@ -1499,7 +1228,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
                 <ReferenceArea
                   yAxisId="chance"
                   x1={`พ.ศ. ${LAST_REAL_YEAR + 543}`}
-                  x2={`พ.ศ. ${LAST_SELECTABLE_YEAR + 543}`}
+                  x2={`พ.ศ. ${boundaries.lastSelectableYear + 543}`}
                   fill="#8b5cf6"
                   fillOpacity={0.07}
                   label={{ value: "ช่วงแนวโน้ม", position: "insideTop", fontSize: 10, fill: "#8b5cf6" }}
