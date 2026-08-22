@@ -66,6 +66,7 @@ function formatCountOrDash(n) {
 function translateWord(word) {
   const dict = {
     Rain_Heavy: "ฝนตกหนัก",
+    rain_level_High: "ปริมาณฝนสูงกว่าปกติ",
     Search_ฝนตก: "ค้นหา 'ฝนตก'",
     Search_น้ำท่วม: "ค้นหา 'น้ำท่วม'",
     Search_พายุ: "ค้นหา 'พายุ'",
@@ -372,28 +373,28 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       if (monthRow && monthRow[field] != null) val = Number(monthRow[field]);
       levels[field] = levelOfValue(val, fieldThresholds[field]);
     }
-    if (isHeavyRainActual) {
-      levels.rain = "High";
-    } else {
-      levels.rain = "NotHigh";
+
+    // rain_level_High ตามเกณฑ์เดียวกับที่ใช้หากฎ Apriori: ฝน > 110% ของค่าปกติ
+    let rainLevelHigh = false;
+    if (monthRow && baseline.value != null && baseline.value !== 0) {
+      const rainValue = parseFloat(monthRow.average_rain) || 0;
+      const percent = (rainValue / baseline.value) * 100;
+      rainLevelHigh = percent > 110;
     }
+    levels.rain = rainLevelHigh ? "High" : "NotHigh";
+
     return levels;
-  }, [monthRow, fieldThresholds, isHeavyRainActual]);
+  }, [monthRow, fieldThresholds, baseline]);
 
   const pendingRules = useMemo(() => {
     if (!isForecastYear) return [];
-    const pool = [];
-    for (let i = 0; i < rulesArray.length; i++) {
-      const r = rulesArray[i];
-      if (r.province === selectedProvince && parseInt(r.month) === parseInt(selectedMonth)) {
-        pool.push(r);
-      }
-    }
 
+    // ใช้กฎทั้งหมดระดับประเทศ (ไม่จำกัดแค่จังหวัด/เดือนที่เคยมีบันทึกน้ำท่วมจริง)
+    // เพราะกฎที่ validate ไว้แล้วใช้ตรวจสอบได้กับทุกจังหวัด/ทุกเดือน
     const grouped = {};
     const groupKeys = [];
-    for (let i = 0; i < pool.length; i++) {
-      const r = pool[i];
+    for (let i = 0; i < rulesArray.length; i++) {
+      const r = rulesArray[i];
       const key = asArray(r.antecedents).join(",") + "=>" + asArray(r.consequents).join(",");
       if (!grouped[key]) {
         grouped[key] = { antecedents: asArray(r.antecedents), consequents: asArray(r.consequents), confidenceSum: 0, count: 0 };
@@ -419,7 +420,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       let allHigh = true;
       for (let j = 0; j < rule.antecedents.length; j++) {
         const ant = rule.antecedents[j];
-        if (ant === "Rain_Heavy") {
+        if (ant === "rain_level_High" || ant === "Rain_Heavy") {
           if (currentLevels.rain !== "High") allHigh = false;
         } else {
           const field = antecedentToField[ant];
@@ -430,7 +431,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
     }
     matching.sort((a, b) => a.confidence - b.confidence);
     return matching;
-  }, [isForecastYear, rulesArray, selectedProvince, selectedMonth, currentLevels]);
+  }, [isForecastYear, rulesArray, currentLevels]);
 
   const ruleCountInfo = useMemo(() => {
     let source;
