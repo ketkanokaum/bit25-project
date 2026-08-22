@@ -6,7 +6,7 @@ import {
   CartesianGrid, ResponsiveContainer, ReferenceLine, Legend,
 } from 'recharts';
 
-import { percentOfNormal, classifyRainLevel } from '@/lib/data/rainlevel';
+import { percentOfNormal, classifyRainLevel } from '@/lib/rainlevel';
 import { provinceRegions, regionOrder } from '@/lib/constants/provinces';
 
 const THAI_MONTHS = [

@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import RainfallChart from './RainfallChart';
-import { percentOfNormal, classifyRainLevel, RAIN_LEVELS } from '@/lib/data/rainlevel';
+import { percentOfNormal, classifyRainLevel, RAIN_LEVELS } from '@/lib/rainlevel';
 import { provinceRegions, regionOrder } from '@/lib/constants/provinces';
 
 function IconTune() {
