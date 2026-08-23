@@ -19,11 +19,11 @@ const THAI_MONTHS_SHORT = [
 ];
 
 function tooltipFormatter(value, name) {
-  if (name === 'ปริมาณฝนจริง') {
+  if (name === 'ปริมาณน้ำฝนจริง') {
     if (value == null) return ['-', name];
     return [`${value} มม.`, name];
   }
-  if (name === 'ปริมาณฝนพยากรณ์') {
+  if (name === 'แนวโน้มปริมาณน้ำฝน') {
     if (value == null) return ['-', name];
     return [`${value} มม.`, name];
   }
@@ -506,7 +506,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
         key={province + '_forecast'}
         type="monotone"
         dataKey={province + '_forecast'}
-        name={`${province} (พยากรณ์)`}
+        name={`${province} (แนวโน้ม)`}
         stroke={color}
         strokeWidth={2.5}
         strokeDasharray="7 4"
@@ -649,7 +649,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
 
       {!data ? (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center text-slate-400 text-sm font-bold">
-          ยังไม่มีข้อมูลพยากรณ์สำหรับจังหวัดนี้
+          ยังไม่มีข้อมูลแนวโน้มปริมาณน้ำฝนสำหรับจังหวัดนี้
         </div>
       ) : (
         <>
@@ -671,7 +671,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                   <span className="text-[18px] font-bold text-slate-400 ml-1">มม.</span>
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  ช่วงที่เป็นไปได้ {Number(highlightForecast.predicted_rain_lower).toFixed(1)}–{Number(highlightForecast.predicted_rain_upper).toFixed(1)} มม.
+                  ช่วงที่เป็นไปได้ {Number(highlightForecast.predicted_rain_lower).toFixed(1)} – {Number(highlightForecast.predicted_rain_upper).toFixed(1)} มม.
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${highlightStyle.badge}`}>
@@ -687,7 +687,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
             <h3 className="text-slate-800 font-bold text-sm mb-1">
               ปริมาณน้ำฝนรายเดือน {data.province} — ปี {data.year + 543}
             </h3>
-            <p className="text-xs text-slate-400 mb-4">เส้นทึบคือข้อมูลจริง เส้นประคือค่าพยากรณ์ พื้นที่แรเงาคือช่วงความเชื่อมั่น</p>
+            <p className="text-xs text-slate-400 mb-4">เส้นทึบ คือข้อมูลจริง เส้นประ คือค่าแนวโน้มปริมาณน้ำฝน พื้นที่แรเงา คือช่วงความเชื่อมั่น</p>
 
             <ResponsiveContainer width="100%" height={320}>
               <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
@@ -731,7 +731,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                 <Line
                   type="monotone"
                   dataKey="forecast"
-                  name="ปริมาณฝนพยากรณ์"
+                  name="แนวโน้มปริมาณน้ำฝน"
                   stroke="#8b5cf6"
                   strokeWidth={2.5}
                   strokeDasharray="7 4"
@@ -745,9 +745,9 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
           {compareProvinces.length > 0 && (
             <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
               <h3 className="text-slate-800 font-bold text-sm mb-1">
-                เปรียบเทียบปริมาณฝนพยากรณ์ระหว่างจังหวัด — ปี {data.year + 543}
+                เปรียบเทียบแนวโน้มปริมาณน้ำฝนระหว่างจังหวัด — ปี {data.year + 543}
               </h3>
-              <p className="text-xs text-slate-400 mb-4">เส้นทึบคือข้อมูลจริง เส้นประคือค่าพยากรณ์ — สีเดียวกันคือจังหวัดเดียวกัน</p>
+              <p className="text-xs text-slate-400 mb-4">เส้นทึบคือ ข้อมูลจริง เส้นประคือค่าแนวโน้มปริมาณน้ำฝน </p>
 
               <ResponsiveContainer width="100%" height={320}>
                 <ComposedChart data={compareChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
@@ -762,6 +762,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
             </div>
           )}
 
+          
           {verifiedMonths.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
@@ -776,6 +777,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
               </div>
             </div>
           )}
+      
         </>
       )}
     </div>
