@@ -3,16 +3,14 @@
 @source "../components/**/*.{js,jsx,ts,tsx}";
 
 :root {
-  /* พื้นหลังหน้าเว็บ — ขาวอมเทาอ่อนมาก ไม่ใช่ขาวสนิท
-     เพราะการ์ดเป็นสีขาว ถ้าพื้นหลังขาวด้วยจะกลืนกันจนแยกไม่ออก
-     ค่านี้ต่างจากขาวแค่ประมาณ 3% ตายังอ่านว่าเป็นหน้าขาวอยู่ */
+
   --background:       #f8fafc;
   --background-card:  #ffffff;
 
   --foreground:       #0f172a;
   --foreground-muted: #64748b;
 
-  /* สีฟ้าใช้เป็นจุดเน้น ไม่ใช่พื้นหลัง */
+
   --accent-primary:   #0284c7;
   --accent-dark:      #0369a1;
   --accent-light:     #e0f2fe;

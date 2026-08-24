@@ -763,7 +763,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
           )}
 
           
-          {verifiedMonths.length > 0 && (
+          {/* {verifiedMonths.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
                 <h3 className="text-slate-800 font-bold text-sm">ตรวจสอบความแม่นยำของค่าพยากรณ์</h3>
@@ -776,7 +776,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                 {verifiedRows}
               </div>
             </div>
-          )}
+          )} */}
       
         </>
       )}

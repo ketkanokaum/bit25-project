@@ -22,7 +22,7 @@ export default async function ForecastPage() {
   }
 
   return (
-    <div className="min-h-screen font-sans">
+    <div className="min-h-screen">
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 lg:px-6 py-8 flex flex-col gap-6">
