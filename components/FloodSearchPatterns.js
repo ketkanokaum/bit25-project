@@ -65,7 +65,6 @@ function formatCountOrDash(n) {
 
 function translateWord(word) {
   const dict = {
-    Rain_Heavy: "ฝนตกหนัก",
     rain_level_High: "ปริมาณฝนสูงกว่าปกติ",
     Search_ฝนตก: "ค้นหา 'ฝนตก'",
     Search_น้ำท่วม: "ค้นหา 'น้ำท่วม'",
@@ -374,7 +373,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       levels[field] = levelOfValue(val, fieldThresholds[field]);
     }
 
-    // rain_level_High ตามเกณฑ์เดียวกับที่ใช้หากฎ Apriori: ฝน > 110% ของค่าปกติ
+
     let rainLevelHigh = false;
     if (monthRow && baseline.value != null && baseline.value !== 0) {
       const rainValue = parseFloat(monthRow.average_rain) || 0;
@@ -389,8 +388,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
   const pendingRules = useMemo(() => {
     if (!isForecastYear) return [];
 
-    // ใช้กฎทั้งหมดระดับประเทศ (ไม่จำกัดแค่จังหวัด/เดือนที่เคยมีบันทึกน้ำท่วมจริง)
-    // เพราะกฎที่ validate ไว้แล้วใช้ตรวจสอบได้กับทุกจังหวัด/ทุกเดือน
+
     const grouped = {};
     const groupKeys = [];
     for (let i = 0; i < rulesArray.length; i++) {
@@ -429,8 +427,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       for (let j = 0; j < rule.antecedents.length; j++) {
         if (!isItemHigh(rule.antecedents[j])) allHigh = false;
       }
-      // ต้องเข้าเงื่อนไขทั้งฝั่งเหตุและฝั่งผลจริงในเดือนนี้ ไม่ใช่แค่ฝั่งเหตุ
-      // เพื่อให้ "รูปแบบที่พบ" หมายถึงรูปแบบที่มีการค้นหาจริงครบทั้งสองฝั่ง
+
       for (let j = 0; j < rule.consequents.length; j++) {
         if (!isItemHigh(rule.consequents[j])) allHigh = false;
       }

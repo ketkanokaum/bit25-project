@@ -545,7 +545,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       <div key={v.month} className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl">
         <span className="text-xs font-bold text-slate-600 w-16">{v.label}</span>
         <span className="text-xs text-slate-500 flex-1">
-          พยากรณ์: {v.forecastLabel}
+          แนวโน้มปริมาณน้ำฝน: {v.forecastLabel}
           {forecastPercentText}
           {" · "}จริง: {v.actualLabel}
           {actualPercentText}
@@ -687,7 +687,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
             <h3 className="text-slate-800 font-bold text-sm mb-1">
               ปริมาณน้ำฝนรายเดือน {data.province} — ปี {data.year + 543}
             </h3>
-            <p className="text-xs text-slate-400 mb-4">เส้นทึบ คือข้อมูลจริง เส้นประ คือค่าแนวโน้มปริมาณน้ำฝน พื้นที่แรเงา คือช่วงความเชื่อมั่น</p>
+            
 
             <ResponsiveContainer width="100%" height={320}>
               <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
@@ -747,7 +747,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
               <h3 className="text-slate-800 font-bold text-sm mb-1">
                 เปรียบเทียบแนวโน้มปริมาณน้ำฝนระหว่างจังหวัด — ปี {data.year + 543}
               </h3>
-              <p className="text-xs text-slate-400 mb-4">เส้นทึบคือ ข้อมูลจริง เส้นประคือค่าแนวโน้มปริมาณน้ำฝน </p>
+            
 
               <ResponsiveContainer width="100%" height={320}>
                 <ComposedChart data={compareChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
