@@ -414,18 +414,25 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       });
     }
 
+    function isItemHigh(item) {
+      if (item === "rain_level_High" || item === "Rain_Heavy") {
+        return currentLevels.rain === "High";
+      }
+      const field = antecedentToField[item];
+      return !!field && currentLevels[field] === "High";
+    }
+
     const matching = [];
     for (let i = 0; i < merged.length; i++) {
       const rule = merged[i];
       let allHigh = true;
       for (let j = 0; j < rule.antecedents.length; j++) {
-        const ant = rule.antecedents[j];
-        if (ant === "rain_level_High" || ant === "Rain_Heavy") {
-          if (currentLevels.rain !== "High") allHigh = false;
-        } else {
-          const field = antecedentToField[ant];
-          if (!field || currentLevels[field] !== "High") allHigh = false;
-        }
+        if (!isItemHigh(rule.antecedents[j])) allHigh = false;
+      }
+      // ต้องเข้าเงื่อนไขทั้งฝั่งเหตุและฝั่งผลจริงในเดือนนี้ ไม่ใช่แค่ฝั่งเหตุ
+      // เพื่อให้ "รูปแบบที่พบ" หมายถึงรูปแบบที่มีการค้นหาจริงครบทั้งสองฝั่ง
+      for (let j = 0; j < rule.consequents.length; j++) {
+        if (!isItemHigh(rule.consequents[j])) allHigh = false;
       }
       if (allHigh) matching.push(rule);
     }
