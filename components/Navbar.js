@@ -8,8 +8,9 @@ export default function Navbar() {
 
   const navItems = [
     { href: '/', label: 'ปริมาณน้ำฝนล่วงหน้า', shortLabel: 'ล่วงหน้า' },
-    { href: '/pattern', label: 'ความเสี่ยงอุทกภัย', shortLabel: 'ความเสี่ยง' },
+    { href: '/pattern', label: 'เฝ้าระวังอุทกภัย', shortLabel: 'เฝ้าระวังอุทกภัย' },
     { href: '/rainfall', label: 'ปริมาณน้ำฝนย้อนหลัง', shortLabel: 'ย้อนหลัง' },
+    //{ href: '/rainfall-live', label: 'ฝนตกจริงวันนี้', shortLabel: 'ฝนวันนี้' },
   ];
 
   const navLinks = [];
@@ -22,7 +23,7 @@ export default function Navbar() {
         isActive = true;
       }
     } else {
-      if (pathname.startsWith(item.href)) {
+      if (pathname === item.href || pathname.startsWith(item.href + '/')) {
         isActive = true;
       }
     }

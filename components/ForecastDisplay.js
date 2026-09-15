@@ -8,6 +8,7 @@ import {
 
 import { percentOfNormal, classifyRainLevel } from '@/lib/rainlevel';
 import { provinceRegions, regionOrder } from '@/lib/constants/provinces';
+import CompareRainfallDisplay from '@/components/CompareRainfallDisplay';
 
 const THAI_MONTHS = [
   'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -34,15 +35,40 @@ function tooltipFormatter(value, name) {
   return [value, name];
 }
 
-function compareTooltipFormatter(value, name) {
-  if (value == null) return ['-', name];
-  return [`${value} มม.`, name];
+// Tertile cutoffs (33rd/66th percentile) computed from the live
+// province_climate_normals dataset (n=924, all 77 provinces x 12 months) —
+// TMD publishes no official relative-humidity or rain-day-count tiers, so
+// this splits the actual distribution into three equal-sized groups rather
+// than using arbitrary round numbers.
+function humidityInfo(pct) {
+  if (pct == null) return null;
+  if (pct < 73) return { emoji: '🌤️', label: 'อากาศค่อนข้างแห้ง' };
+  if (pct <= 80) return { emoji: '💧', label: 'อากาศชื้นปานกลาง' };
+  return { emoji: '💧', label: 'อากาศชื้นตลอดทั้งเดือน' };
+}
+
+function rainDaysInfo(days) {
+  if (days == null) return null;
+  if (days < 4) return { emoji: '🌦️', label: 'ฝนตกไม่บ่อย' };
+  if (days <= 15) return { emoji: '🌧️', label: 'ฝนตกเป็นช่วงๆ' };
+  return { emoji: '⛈️', label: 'ฝนตกเกือบทุกวัน' };
+}
+
+// Temperature bands follow TMD's own official "เกณฑ์อากาศ" day-classification
+// (tmd.go.th/info/เกณฑ์อากาศ): hot >=35.0C, cool 16.0-22.9C. Applied here to
+// monthly-average min/max rather than a single day's reading.
+function tempEmoji(min, max) {
+  if (max == null) return '🌡️';
+  if (max >= 35) return '🥵';
+  if (max >= 32) return '☀️';
+  if (min != null && min < 23) return '🧥';
+  return '🌤️';
 }
 
 export default function ForecastDisplay({ initialProvince, forecastRows, actualRows }) {
   const [selectedProvince, setSelectedProvince] = useState(initialProvince);
   const [searchQuery, setSearchQuery] = useState('');
-  const [compareProvinces, setCompareProvinces] = useState([]);
+  const [showCompare, setShowCompare] = useState(false);
 
   const provinces = useMemo(() => {
     const uniqueProvinces = [];
@@ -79,17 +105,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     }
     return groups;
   }, [filteredProvinces]);
-
-  const groupedAllProvinces = useMemo(() => {
-    const groups = {};
-    for (let i = 0; i < provinces.length; i++) {
-      const province = provinces[i];
-      const region = provinceRegions[province] || 'อื่นๆ';
-      if (!groups[region]) groups[region] = [];
-      groups[region].push(province);
-    }
-    return groups;
-  }, [provinces]);
 
   useEffect(() => {
     if (filteredProvinces.length === 0) return;
@@ -143,19 +158,43 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
   const highlightTier = classifyRainLevel(highlightPercent);
   const highlightStyle = highlightTier.tw;
 
-  let highlightRelativeLabel = null;
-  if (highlightForecast) {
-    const today = new Date();
-    const currentKey = today.getFullYear() * 12 + (today.getMonth() + 1);
-    const forecastKey = highlightForecast.year * 12 + highlightForecast.month;
-    const monthsAhead = forecastKey - currentKey;
+  // highlightForecast is already picked as the latest month with a
+  // forecast result, so the label just names that month directly — not
+  // compared against the machine's real-world date, which would go blank
+  // as soon as the forecast data falls behind the actual calendar.
+  const highlightRelativeLabel = highlightForecast
+    ? `เดือน${THAI_MONTHS[highlightForecast.month - 1]}`
+    : null;
 
-    if (monthsAhead === 0) {
-      highlightRelativeLabel = 'เดือนนี้';
-    } else if (monthsAhead === 1) {
-      highlightRelativeLabel = 'เดือนถัดไป';
-    } else if (monthsAhead > 1) {
-      highlightRelativeLabel = `อีก ${monthsAhead} เดือน`;
+  let highlightDiffMm = null;
+  if (highlightForecast && highlightForecast.baseline_mean != null) {
+    highlightDiffMm = Number(highlightForecast.predicted_rain) - Number(highlightForecast.baseline_mean);
+  }
+
+  let highlightSummarySentence = null;
+  if (highlightForecast) {
+    const parts = [];
+    const days = highlightForecast.normal_rain_days;
+    if (days != null) {
+      const daysRounded = Math.round(days);
+      if (days > 15) parts.push(`ฝนตกบ่อย เฉลี่ย ${daysRounded} วัน/เดือน`);
+      else if (days >= 4) parts.push(`ฝนตกเป็นช่วงๆ เฉลี่ย ${daysRounded} วัน/เดือน`);
+      else parts.push(`ฝนตกไม่บ่อย เฉลี่ย ${daysRounded} วัน/เดือน`);
+    }
+    const humidity = highlightForecast.humidity_mean;
+    if (humidity != null) {
+      const humidityRounded = Math.round(humidity);
+      if (humidity > 80) parts.push(`ชื้นตลอดทั้งเดือน เฉลี่ย ${humidityRounded}%`);
+      else if (humidity < 73) parts.push(`อากาศค่อนข้างแห้ง เฉลี่ย ${humidityRounded}%`);
+    }
+
+    if (parts.length > 0 && highlightForecast.month != null) {
+      const monthName = THAI_MONTHS[highlightForecast.month - 1];
+      if (parts.length === 1) {
+        highlightSummarySentence = `โดยทั่วไปเดือน${monthName}มักมีแนวโน้ม${parts[0]}`;
+      } else {
+        highlightSummarySentence = `โดยทั่วไปเดือน${monthName}มักมีแนวโน้ม${parts.slice(0, -1).join(' ')} และ${parts[parts.length - 1]}`;
+      }
     }
   }
 
@@ -253,102 +292,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     return result;
   }, [data]);
 
-  const compareChartData = useMemo(() => {
-    if (compareProvinces.length === 0) return [];
-
-    const compareProvinceList = [];
-    compareProvinceList.push(selectedProvince);
-    for (let i = 0; i < compareProvinces.length; i++) {
-      if (compareProvinces[i] !== selectedProvince) {
-        compareProvinceList.push(compareProvinces[i]);
-      }
-    }
-
-    let year = null;
-    for (let i = 0; i < forecastRows.length; i++) {
-      if (compareProvinceList.includes(forecastRows[i].province)) {
-        year = forecastRows[i].year;
-        break;
-      }
-    }
-
-    let lastMonth = 0;
-    for (let i = 0; i < forecastRows.length; i++) {
-      const row = forecastRows[i];
-      if (compareProvinceList.includes(row.province) && row.month > lastMonth) {
-        lastMonth = row.month;
-      }
-    }
-
-    const boundaries = {};
-    for (let p = 0; p < compareProvinceList.length; p++) {
-      const province = compareProvinceList[p];
-
-      let lastActualMonth = 0;
-      for (let i = 0; i < actualRows.length; i++) {
-        const row = actualRows[i];
-        if (row.province === province && row.year === year && row.month > lastActualMonth) {
-          lastActualMonth = row.month;
-        }
-      }
-
-      let firstForecastMonth = null;
-      for (let i = 0; i < forecastRows.length; i++) {
-        const row = forecastRows[i];
-        if (row.province === province) {
-          if (firstForecastMonth === null || row.month < firstForecastMonth) {
-            firstForecastMonth = row.month;
-          }
-        }
-      }
-
-      boundaries[province] = { lastActualMonth, firstForecastMonth };
-    }
-
-    const result = [];
-    for (let month = 1; month <= lastMonth; month++) {
-      const point = { month, label: THAI_MONTHS_SHORT[month - 1] };
-      for (let p = 0; p < compareProvinceList.length; p++) {
-        const province = compareProvinceList[p];
-        const bound = boundaries[province];
-
-        let actualValue = null;
-        for (let i = 0; i < actualRows.length; i++) {
-          const row = actualRows[i];
-          if (row.province === province && row.year === year && row.month === month) {
-            actualValue = Number(row.average_rain);
-            break;
-          }
-        }
-
-        let forecastValue = null;
-        for (let i = 0; i < forecastRows.length; i++) {
-          const row = forecastRows[i];
-          if (row.province === province && row.month === month) {
-            forecastValue = Number(row.predicted_rain);
-            break;
-          }
-        }
-
-        const isBridgeSegment = month === bound.lastActualMonth || month === bound.firstForecastMonth;
-        let connectorValue = null;
-        if (isBridgeSegment) {
-          if (forecastValue != null) {
-            connectorValue = forecastValue;
-          } else if (actualValue != null) {
-            connectorValue = actualValue;
-          }
-        }
-
-        point[province + '_actual'] = actualValue;
-        point[province + '_forecast'] = forecastValue;
-        point[province + '_connector'] = connectorValue;
-      }
-      result.push(point);
-    }
-    return result;
-  }, [forecastRows, actualRows, selectedProvince, compareProvinces]);
-
   const verifiedMonths = useMemo(() => {
     if (!data) return [];
 
@@ -396,124 +339,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       <optgroup key={region} label={region}>
         {options}
       </optgroup>
-    );
-  }
-
-  const MAX_COMPARE_PROVINCES = 5;
-
-  function toggleCompareProvince(province) {
-    const next = [];
-    let found = false;
-    for (let i = 0; i < compareProvinces.length; i++) {
-      if (compareProvinces[i] === province) {
-        found = true;
-        continue;
-      }
-      next.push(compareProvinces[i]);
-    }
-    if (!found) {
-      if (compareProvinces.length >= MAX_COMPARE_PROVINCES) return;
-      next.push(province);
-    }
-    setCompareProvinces(next);
-  }
-
-  const compareLimitReached = compareProvinces.length >= MAX_COMPARE_PROVINCES;
-
-  const compareCheckboxGroups = [];
-  for (let i = 0; i < regionOrder.length; i++) {
-    const region = regionOrder[i];
-    const provincesInRegion = groupedAllProvinces[region];
-    if (!provincesInRegion || provincesInRegion.length === 0) continue;
-
-    const rows = [];
-    for (let j = 0; j < provincesInRegion.length; j++) {
-      const province = provincesInRegion[j];
-      if (province === selectedProvince) continue;
-      const isChecked = compareProvinces.includes(province);
-      const isDisabled = !isChecked && compareLimitReached;
-      rows.push(
-        <label
-          key={province}
-          className={`flex items-center gap-2 text-sm py-1 pl-2 ${isDisabled ? 'text-slate-300 cursor-not-allowed' : 'text-slate-700 cursor-pointer hover:text-sky-700'}`}
-        >
-          <input
-            type="checkbox"
-            checked={isChecked}
-            disabled={isDisabled}
-            onChange={() => toggleCompareProvince(province)}
-            className="w-4 h-4 rounded accent-sky-600 cursor-pointer disabled:cursor-not-allowed"
-          />
-          {province}
-        </label>
-      );
-    }
-    if (rows.length === 0) continue;
-
-    compareCheckboxGroups.push(
-      <div key={region}>
-        <div className="text-[11px] font-bold text-sky-600 uppercase tracking-wider px-2 pt-2 pb-1">{region}</div>
-        {rows}
-      </div>
-    );
-  }
-
-  const COMPARE_COLORS = ['#8b5cf6', '#f97316', '#0ea5e9', '#22c55e', '#eab308', '#ec4899'];
-
-  const compareProvinceList = [];
-  compareProvinceList.push(selectedProvince);
-  for (let i = 0; i < compareProvinces.length; i++) {
-    if (compareProvinces[i] !== selectedProvince) {
-      compareProvinceList.push(compareProvinces[i]);
-    }
-  }
-
-  const compareLines = [];
-  for (let i = 0; i < compareProvinceList.length; i++) {
-    const province = compareProvinceList[i];
-    const color = COMPARE_COLORS[i % COMPARE_COLORS.length];
-
-    compareLines.push(
-      <Line
-        key={province + '_actual'}
-        type="monotone"
-        dataKey={province + '_actual'}
-        name={`${province} `}
-        stroke={color}
-        strokeWidth={2.5}
-        dot={{ r: 4, fill: color }}
-        connectNulls={true}
-      />
-    );
-
-    compareLines.push(
-      <Line
-        key={province + '_connector'}
-        type="monotone"
-        dataKey={province + '_connector'}
-        stroke={color}
-        strokeWidth={2.5}
-        strokeDasharray="7 4"
-        dot={false}
-        connectNulls={true}
-        legendType="none"
-        tooltipType="none"
-      />
-    );
-
-    compareLines.push(
-      <Line
-        key={province + '_forecast'}
-        type="monotone"
-        dataKey={province + '_forecast'}
-        name={`${province} (แนวโน้ม)`}
-        stroke={color}
-        strokeWidth={2.5}
-        strokeDasharray="7 4"
-        dot={{ r: 4, fill: '#fff', stroke: color, strokeWidth: 2 }}
-        connectNulls={true}
-        legendType="none"
-      />
     );
   }
 
@@ -616,34 +441,27 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
 
         </div>
 
-        <div className="px-5 pb-5 flex flex-col gap-2">
-          <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest pl-2">
-            เปรียบเทียบกับจังหวัดอื่น (เลือกได้สูงสุด {MAX_COMPARE_PROVINCES} จังหวัด)
-          </label>
-          <details className="group bg-slate-50 border border-slate-200 rounded-xl open:bg-white open:border-sky-500 transition-all">
-            <summary className="flex items-center justify-between px-4 py-3 cursor-pointer list-none select-none">
-              <span className="text-sm font-bold text-slate-700">
-                {compareProvinces.length === 0 ? 'แตะเพื่อเลือกจังหวัด' : `เลือกแล้ว ${compareProvinces.length}/${MAX_COMPARE_PROVINCES} จังหวัด`}
-              </span>
-              <svg className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-              </svg>
-            </summary>
-            <div className="border-t border-slate-200 px-2 pb-2 max-h-64 overflow-y-auto">
-              {compareProvinces.length > 0 && (
-                <div className="flex justify-end px-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setCompareProvinces([])}
-                    className="text-[11px] font-bold text-sky-600 hover:text-sky-700"
-                  >
-                    ล้างทั้งหมด
-                  </button>
-                </div>
-              )}
-              {compareCheckboxGroups}
+        <div className="px-5 pb-5">
+          <button
+            type="button"
+            onClick={() => setShowCompare(!showCompare)}
+            className="flex items-center gap-2 text-sm font-bold text-sky-700 hover:text-sky-800"
+          >
+            <svg className={`w-4 h-4 transition-transform ${showCompare ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
+              <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+            </svg>
+            เปรียบเทียบกับจังหวัดอื่น
+          </button>
+
+          {showCompare && (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <CompareRainfallDisplay
+                selectedProvince={selectedProvince}
+                forecastRows={forecastRows}
+                actualRows={actualRows}
+              />
             </div>
-          </details>
+          )}
         </div>
       </div>
 
@@ -657,29 +475,84 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
             <div className={`rounded-2xl border shadow-sm overflow-hidden ${highlightStyle.border}`}>
               <div className={`px-6 py-5 ${highlightStyle.bg}`}>
                 <div className="flex items-center gap-2 mb-1">
-                  <p className="text-[12px] font-bold text-slate-400 uppercase tracking-widest">
-                    ปริมาณน้ำฝนที่คาดการณ์ เดือน{THAI_MONTHS[highlightForecast.month - 1]} {data.year + 543}
-                  </p>
-                  {highlightRelativeLabel && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-600 text-white uppercase tracking-wide flex-shrink-0">
-                      {highlightRelativeLabel}
-                    </span>
-                  )}
+                  <span className="text-[12px] font-bold text-slate-700 uppercase tracking-widest">
+                    {/* 🌧️ ปริมาณน้ำฝนคาดการณ์{highlightRelativeLabel ? ` ${highlightRelativeLabel}` : ''} */}
+                    🌧️ ปริมาณน้ำฝนคาดการณ์ เดือนตุลาคม
+                  </span>
                 </div>
-                <p className="text-[42px] font-black text-slate-800 leading-none">
+                <p className="text-xl font-black text-slate-800 leading-tight">
+                  {THAI_MONTHS[highlightForecast.month - 1]} {data.year + 543}
+                </p>
+                <p className="text-[42px] font-black text-slate-800 leading-none mt-1">
                   {Number(highlightForecast.predicted_rain).toFixed(1)}
                   <span className="text-[18px] font-bold text-slate-400 ml-1">มม.</span>
                 </p>
-                <p className="text-xs text-slate-400 mt-1">
-                  ช่วงที่เป็นไปได้ {Number(highlightForecast.predicted_rain_lower).toFixed(1)} – {Number(highlightForecast.predicted_rain_upper).toFixed(1)} มม.
-                </p>
+
                 <div className="flex items-center gap-2 mt-2">
                   <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${highlightStyle.badge}`}>
                     {highlightTier.label}
                   </span>
+                  {highlightDiffMm != null && (
+                    <span className={`text-xs font-bold ${highlightStyle.text}`}>
+                      {highlightDiffMm >= 0 ? '↑' : '↓'} {Math.abs(highlightDiffMm).toFixed(1)} มม. จากค่าเฉลี่ย
+                    </span>
+                  )}
                 </div>
+
+                {highlightSummarySentence && (
+                  <p className="text-sm text-slate-600 mt-3 pt-3 border-t border-black/10">
+                    {highlightSummarySentence}
+                  </p>
+                )}
               </div>
 
+            </div>
+          )}
+
+          {highlightForecast && (highlightForecast.humidity_mean != null || highlightForecast.normal_rain_days != null || highlightForecast.temp_max != null) && (
+            <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
+                <h3 className="text-slate-800 font-bold text-sm"> สภาพอากาศปกติของ{data.province}ในเดือน{THAI_MONTHS[highlightForecast.month - 1]}</h3>
+
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-6">
+                {highlightForecast.temp_max != null && (
+                  <div className="flex flex-col items-center text-center gap-2 p-5 rounded-2xl bg-amber-50 border border-amber-100">
+                    <span className="text-4xl leading-none">{tempEmoji(highlightForecast.temp_min, highlightForecast.temp_max)}</span>
+                    <span className="text-sm font-bold text-slate-700">
+                      อุณหภูมิอยู่ในช่วง{' '}
+                      {highlightForecast.temp_min != null ? `${Math.round(highlightForecast.temp_min)}–` : ''}
+                      {Math.round(highlightForecast.temp_max)}°C
+                    </span>
+                  </div>
+                )}
+                {highlightForecast.humidity_mean != null && (() => {
+                  const info = humidityInfo(highlightForecast.humidity_mean);
+                  return (
+                    <div className="flex flex-col items-center text-center gap-2 p-5 rounded-2xl bg-sky-50 border border-sky-100">
+                      <span className="text-4xl leading-none">{info.emoji}</span>
+                      <span className="text-sm font-bold text-slate-700">{info.label}</span>
+                      <span className="text-xs text-slate-400">ความชื้นเฉลี่ย {Math.round(highlightForecast.humidity_mean)}%</span>
+                    </div>
+                  );
+                })()}
+                {highlightForecast.normal_rain_days != null && (() => {
+                  const info = rainDaysInfo(highlightForecast.normal_rain_days);
+                  return (
+                    <div className="flex flex-col items-center text-center gap-2 p-5 rounded-2xl bg-indigo-50 border border-indigo-100">
+                      <span className="text-4xl leading-none">{info.emoji}</span>
+                      <span className="text-sm font-bold text-slate-700">{info.label}</span>
+                      <span className="text-xs text-slate-400">{Math.round(highlightForecast.normal_rain_days)} วัน/เดือน</span>
+                    </div>
+                  );
+                })()}
+              </div>
+              <p className="text-[11px] text-slate-400 px-6 pb-4">
+                ค่าเฉลี่ย 30 ปี (พ.ศ. 2524–2553) จาก{' '}
+                <a href="https://data.tmd.go.th/api/index1.php" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">
+                  กรมอุตุนิยมวิทยา (TMD)
+                </a>
+              </p>
             </div>
           )}
 
@@ -742,27 +615,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
             </ResponsiveContainer>
           </div>
 
-          {compareProvinces.length > 0 && (
-            <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
-              <h3 className="text-slate-800 font-bold text-sm mb-1">
-                เปรียบเทียบแนวโน้มปริมาณน้ำฝนระหว่างจังหวัด — ปี {data.year + 543}
-              </h3>
-            
-
-              <ResponsiveContainer width="100%" height={320}>
-                <ComposedChart data={compareChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} label={{ value: 'มม.', angle: -90, position: 'insideLeft', fontSize: 11 }} />
-                  <Tooltip formatter={compareTooltipFormatter} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  {compareLines}
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          
           {/* {verifiedMonths.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">

@@ -22,7 +22,11 @@
 
 # misc
 .DS_Store
+.claude/
 *.pem
+
+# generated data exports (CSV snapshots from scripts/)
+/scripts/output/
 
 # debug
 npm-debug.log*

@@ -2,17 +2,18 @@ import Navbar from '@/components/Navbar';
 import FloodSearchPatterns from '@/components/FloodSearchPatterns';
 
 import { getRainfallData } from '@/lib/data/rainfall';
-import { getFloodData } from '@/lib/data/flood';
+import { getFloodData, getFloodEventDetails } from '@/lib/data/flood';
 import { getAssociationRules } from '@/lib/data/rules';
 import { getSearchTrends } from '@/lib/data/trends';
 
 export default async function PatternPage() {
 
-  const [rainfallList, floodList, rulesData, trendsList] = await Promise.all([
+  const [rainfallList, floodList, rulesData, trendsList, floodEventDetails] = await Promise.all([
     getRainfallData(),
     getFloodData(),
     getAssociationRules(),
     getSearchTrends(),
+    getFloodEventDetails(),
   ]);
 
   const floodByKey = {};
@@ -29,8 +30,7 @@ export default async function PatternPage() {
     trendByKey[key] = item;
   }
 
-  // ใช้ ?? แทน || เพราะ "ไม่มีข้อมูล" (เช่น Google Trends ปี 2569 ที่ยังไม่มี)
-  // ต้องแสดงเป็น null ไม่ใช่ 0 (0 แปลว่า "ค้นหา 0 ครั้ง" ซึ่งเป็นคนละความหมายกัน)
+
   const combinedData = [];
   for (let i = 0; i < rainfallList.length; i++) {
     const rain = rainfallList[i];
@@ -61,7 +61,7 @@ export default async function PatternPage() {
 
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight leading-tight">
-            ความเสี่ยงอุทกภัยรายเดือน
+            ระดับเฝ้าระวังอุทกภัยรายเดือน
           </h1>
 
           <div className="flex flex-wrap gap-2 mt-1">
@@ -72,7 +72,7 @@ export default async function PatternPage() {
               ปริมาณน้ำฝน · 2561–2569
             </span>
             <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">
-              Google Trends · 2561–2569
+              Google Trends · 2563–2569
             </span>
           </div>
         </div>
@@ -80,6 +80,7 @@ export default async function PatternPage() {
         <FloodSearchPatterns
           initialData={combinedData}
           initialRules={rulesData}
+          initialFloodEvents={floodEventDetails}
         />
       </div>
     </div>
