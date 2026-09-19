@@ -73,6 +73,71 @@ function compareRows(a, b) {
   return a.month - b.month;
 }
 
+
+function getYears(data) {
+  const years = [];
+  for (let i = 0; i < data.length; i++) {
+    const year = data[i].year;
+    if (!years.includes(year)) years.push(year);
+  }
+  years.sort((a, b) => b - a);
+  return ["All", ...years];
+}
+
+function getMonths(data) {
+  const months = [];
+  for (let i = 0; i < data.length; i++) {
+    const month = data[i].month;
+    if (!months.includes(month)) months.push(month);
+  }
+  months.sort((a, b) => a - b);
+  return ["All", ...months];
+}
+
+function getProvinceGroups(data) {
+  const groups = {};
+  for (let i = 0; i < data.length; i++) {
+    const province = data[i].province;
+    const region = provinceRegions[province];
+    if (!groups[region]) groups[region] = [];
+    if (!groups[region].includes(province)) groups[region].push(province);
+  }
+  for (const region in groups) {
+    groups[region].sort();
+  }
+  return groups;
+}
+
+function matchesFilter(item, province, year, month, searchText) {
+  if (province !== "All" && item.province !== province) return false;
+  if (year !== "All" && item.year !== parseInt(year)) return false;
+  if (month !== "All" && item.month !== parseInt(month)) return false;
+
+  if (searchText !== "") {
+    const region = provinceRegions[item.province] || "";
+    const provinceMatch = item.province.toLowerCase().includes(searchText);
+    const regionMatch = region.includes(searchText);
+    if (!provinceMatch && !regionMatch) return false;
+  }
+
+  return true;
+}
+
+function filterRainData(data, province, year, month, searchQuery) {
+  const result = [];
+  const searchText = searchQuery.toLowerCase().trim();
+
+  for (let i = 0; i < data.length; i++) {
+    const item = data[i];
+    if (matchesFilter(item, province, year, month, searchText)) {
+      result.push(item);
+    }
+  }
+
+  result.sort(compareRows);
+  return result;
+}
+
 export default function RainfallTable({ data = [] }) {
   const [isClient, setIsClient] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,75 +151,19 @@ export default function RainfallTable({ data = [] }) {
     setIsClient(true);
   }, []);
 
-  const years = useMemo(() => {
-    const found = [];
-    for (let i = 0; i < data.length; i++) {
-      if (!found.includes(data[i].year)) found.push(data[i].year);
-    }
-    found.sort((a, b) => b - a);
-    const result = ['All'];
-    for (let i = 0; i < found.length; i++) {
-      result.push(found[i]);
-    }
-    return result;
-  }, [data]);
+  const years = useMemo(() => getYears(data), [data]);
 
-  const months = useMemo(() => {
-    const found = [];
-    for (let i = 0; i < data.length; i++) {
-      if (!found.includes(data[i].month)) found.push(data[i].month);
-    }
-    found.sort((a, b) => a - b);
-    const result = ['All'];
-    for (let i = 0; i < found.length; i++) {
-      result.push(found[i]);
-    }
-    return result;
-  }, [data]);
+  const months = useMemo(() => getMonths(data), [data]);
 
-  const groupedProvinces = useMemo(() => {
-    const groups = {};
-    for (let i = 0; i < data.length; i++) {
-      const province = data[i].province;
-      const region = provinceRegions[province];
-      if (!groups[region]) groups[region] = [];
-      if (!groups[region].includes(province)) groups[region].push(province);
-    }
-    for (const region in groups) {
-      groups[region].sort();
-    }
-    return groups;
-  }, [data]);
+  const groupedProvinces = useMemo(() => getProvinceGroups(data), [data]);
 
-  const filteredData = [];
-  const searchText = searchQuery.toLowerCase().trim();
-  for (let i = 0; i < data.length; i++) {
-    const item = data[i];
-    let matches = true;
-
-    if (selectedProvince !== 'All' && item.province !== selectedProvince) {
-      matches = false;
-    }
-    if (selectedYear !== 'All' && item.year !== parseInt(selectedYear)) {
-      matches = false;
-    }
-    if (selectedMonth !== 'All' && item.month !== parseInt(selectedMonth)) {
-      matches = false;
-    }
-    if (searchText !== '') {
-      const regionName = provinceRegions[item.province] || '';
-      const provinceMatches = item.province.toLowerCase().includes(searchText);
-      const regionMatches = regionName.includes(searchText);
-      if (!provinceMatches && !regionMatches) {
-        matches = false;
-      }
-    }
-
-    if (matches) filteredData.push(item);
-  }
-
-  filteredData.sort(compareRows);
-  const sortedData = filteredData;
+  const sortedData = filterRainData(
+    data,
+    selectedProvince,
+    selectedYear,
+    selectedMonth,
+    searchQuery
+  );
 
   const startIndex = page * rowsPerPage;
   const visibleRows = sortedData.slice(startIndex, startIndex + rowsPerPage);

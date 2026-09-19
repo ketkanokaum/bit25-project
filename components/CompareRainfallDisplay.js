@@ -1,31 +1,18 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import {
-  ComposedChart, Line, XAxis, YAxis, Tooltip,
-  CartesianGrid, ResponsiveContainer, Legend,
-} from 'recharts';
+import { useMemo } from 'react';
 
 import { provinceRegions, regionOrder } from '@/lib/constants/provinces';
 
-const THAI_MONTHS_SHORT = [
-  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
-];
-
 const MAX_COMPARE_PROVINCES = 5;
-const COMPARE_COLORS = ['#8b5cf6', '#f97316', '#0ea5e9', '#22c55e', '#eab308', '#ec4899'];
 
-function compareTooltipFormatter(value, name) {
-  if (value == null) return ['-', name];
-  return [`${value} มม.`, name];
-}
 
-// Embeds inline (toggled open/closed) on the main forecast page. The "main"
-// province is whatever the parent page already has selected — this component
-// only owns the "compare with" picker and the resulting chart.
-export default function CompareRainfallDisplay({ selectedProvince, forecastRows, actualRows }) {
-  const [compareProvinces, setCompareProvinces] = useState([]);
+export default function CompareRainfallDisplay({
+  selectedProvince,
+  forecastRows,
+  compareProvinces,
+  onChangeCompareProvinces,
+}) {
 
   const provinces = useMemo(() => {
     const uniqueProvinces = [];
@@ -50,94 +37,6 @@ export default function CompareRainfallDisplay({ selectedProvince, forecastRows,
     return groups;
   }, [provinces]);
 
-  const year = useMemo(() => {
-    if (forecastRows.length === 0) return null;
-    return forecastRows[0].year;
-  }, [forecastRows]);
-
-  const compareProvinceList = useMemo(() => {
-    const list = [selectedProvince];
-    for (let i = 0; i < compareProvinces.length; i++) {
-      if (compareProvinces[i] !== selectedProvince) list.push(compareProvinces[i]);
-    }
-    return list;
-  }, [selectedProvince, compareProvinces]);
-
-  const compareChartData = useMemo(() => {
-    let lastMonth = 0;
-    for (let i = 0; i < forecastRows.length; i++) {
-      const row = forecastRows[i];
-      if (compareProvinceList.includes(row.province) && row.month > lastMonth) {
-        lastMonth = row.month;
-      }
-    }
-
-    const boundaries = {};
-    for (let p = 0; p < compareProvinceList.length; p++) {
-      const province = compareProvinceList[p];
-
-      let lastActualMonth = 0;
-      for (let i = 0; i < actualRows.length; i++) {
-        const row = actualRows[i];
-        if (row.province === province && row.year === year && row.month > lastActualMonth) {
-          lastActualMonth = row.month;
-        }
-      }
-
-      let firstForecastMonth = null;
-      for (let i = 0; i < forecastRows.length; i++) {
-        const row = forecastRows[i];
-        if (row.province === province) {
-          if (firstForecastMonth === null || row.month < firstForecastMonth) {
-            firstForecastMonth = row.month;
-          }
-        }
-      }
-
-      boundaries[province] = { lastActualMonth, firstForecastMonth };
-    }
-
-    const result = [];
-    for (let month = 1; month <= lastMonth; month++) {
-      const point = { month, label: THAI_MONTHS_SHORT[month - 1] };
-      for (let p = 0; p < compareProvinceList.length; p++) {
-        const province = compareProvinceList[p];
-        const bound = boundaries[province];
-
-        let actualValue = null;
-        for (let i = 0; i < actualRows.length; i++) {
-          const row = actualRows[i];
-          if (row.province === province && row.year === year && row.month === month) {
-            actualValue = Number(row.average_rain);
-            break;
-          }
-        }
-
-        let forecastValue = null;
-        for (let i = 0; i < forecastRows.length; i++) {
-          const row = forecastRows[i];
-          if (row.province === province && row.month === month) {
-            forecastValue = Number(row.predicted_rain);
-            break;
-          }
-        }
-
-        const isBridgeSegment = month === bound.lastActualMonth || month === bound.firstForecastMonth;
-        let connectorValue = null;
-        if (isBridgeSegment) {
-          if (forecastValue != null) connectorValue = forecastValue;
-          else if (actualValue != null) connectorValue = actualValue;
-        }
-
-        point[province + '_actual'] = actualValue;
-        point[province + '_forecast'] = forecastValue;
-        point[province + '_connector'] = connectorValue;
-      }
-      result.push(point);
-    }
-    return result;
-  }, [forecastRows, actualRows, compareProvinceList, year]);
-
   function toggleCompareProvince(province) {
     const next = [];
     let found = false;
@@ -152,7 +51,7 @@ export default function CompareRainfallDisplay({ selectedProvince, forecastRows,
       if (compareProvinces.length >= MAX_COMPARE_PROVINCES) return;
       next.push(province);
     }
-    setCompareProvinces(next);
+    onChangeCompareProvinces(next);
   }
 
   const compareLimitReached = compareProvinces.length >= MAX_COMPARE_PROVINCES;
@@ -195,53 +94,6 @@ export default function CompareRainfallDisplay({ selectedProvince, forecastRows,
     );
   }
 
-  const compareLines = [];
-  for (let i = 0; i < compareProvinceList.length; i++) {
-    const province = compareProvinceList[i];
-    const color = COMPARE_COLORS[i % COMPARE_COLORS.length];
-
-    compareLines.push(
-      <Line
-        key={province + '_actual'}
-        type="monotone"
-        dataKey={province + '_actual'}
-        name={`${province} `}
-        stroke={color}
-        strokeWidth={2.5}
-        dot={{ r: 4, fill: color }}
-        connectNulls={true}
-      />
-    );
-    compareLines.push(
-      <Line
-        key={province + '_connector'}
-        type="monotone"
-        dataKey={province + '_connector'}
-        stroke={color}
-        strokeWidth={2.5}
-        strokeDasharray="7 4"
-        dot={false}
-        connectNulls={true}
-        legendType="none"
-        tooltipType="none"
-      />
-    );
-    compareLines.push(
-      <Line
-        key={province + '_forecast'}
-        type="monotone"
-        dataKey={province + '_forecast'}
-        name={`${province} (แนวโน้ม)`}
-        stroke={color}
-        strokeWidth={2.5}
-        strokeDasharray="7 4"
-        dot={{ r: 4, fill: '#fff', stroke: color, strokeWidth: 2 }}
-        connectNulls={true}
-        legendType="none"
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
@@ -262,7 +114,7 @@ export default function CompareRainfallDisplay({ selectedProvince, forecastRows,
               <div className="flex justify-end px-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setCompareProvinces([])}
+                  onClick={() => onChangeCompareProvinces([])}
                   className="text-[11px] font-bold text-sky-600 hover:text-sky-700"
                 >
                   ล้างทั้งหมด
@@ -275,22 +127,9 @@ export default function CompareRainfallDisplay({ selectedProvince, forecastRows,
       </div>
 
       {compareProvinces.length > 0 && (
-        <div>
-          <h3 className="text-slate-800 font-bold text-sm mb-1">
-            เปรียบเทียบแนวโน้มปริมาณน้ำฝนระหว่างจังหวัด {year != null ? `— ปี ${year + 543}` : ''}
-          </h3>
-
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={compareChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} label={{ value: 'มม.', angle: -90, position: 'insideLeft', fontSize: 11 }} />
-              <Tooltip formatter={compareTooltipFormatter} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              {compareLines}
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+        <p className="text-xs text-slate-500">
+          ผลการเปรียบเทียบแสดงอยู่ในกราฟแนวโน้มปริมาณน้ำฝนด้านล่าง
+        </p>
       )}
     </div>
   );

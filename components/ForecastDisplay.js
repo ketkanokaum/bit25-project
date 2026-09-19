@@ -3,72 +3,54 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
   ComposedChart, Line, Area, XAxis, YAxis, Tooltip,
-  CartesianGrid, ResponsiveContainer, ReferenceLine, Legend,
+  CartesianGrid, ResponsiveContainer, Legend,
+  BarChart, Bar,
 } from 'recharts';
 
 import { percentOfNormal, classifyRainLevel } from '@/lib/rainlevel';
 import { provinceRegions, regionOrder } from '@/lib/constants/provinces';
 import CompareRainfallDisplay from '@/components/CompareRainfallDisplay';
+import {
+  THAI_MONTHS_SHORT,
+  formatMm,
+  buildNormalChartData,
+  buildSummarySentence,
+  buildCompareChartData,
+} from '@/lib/forecast-display';
 
 const THAI_MONTHS = [
   'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
   'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
 ];
-const THAI_MONTHS_SHORT = [
-  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
-];
+
+const COMPARE_COLORS = ['#2563eb', '#f97316', '#0ea5e9', '#22c55e', '#eab308', '#ec4899'];
 
 function tooltipFormatter(value, name) {
-  if (name === 'ปริมาณน้ำฝนจริง') {
-    if (value == null) return ['-', name];
-    return [`${value} มม.`, name];
-  }
-  if (name === 'แนวโน้มปริมาณน้ำฝน') {
-    if (value == null) return ['-', name];
-    return [`${value} มม.`, name];
-  }
   if (name === 'ค่าอาจคลาดเคลื่อนอยู่ในช่วงนี้') {
     if (!Array.isArray(value)) return ['-', name];
     return [`${value[0].toFixed(1)}–${value[1].toFixed(1)} มม.`, name];
   }
-  return [value, name];
+  if (value == null) return ['-', name];
+  return [`${value} มม.`, name];
 }
 
-// Tertile cutoffs (33rd/66th percentile) computed from the live
-// province_climate_normals dataset (n=924, all 77 provinces x 12 months) —
-// TMD publishes no official relative-humidity or rain-day-count tiers, so
-// this splits the actual distribution into three equal-sized groups rather
-// than using arbitrary round numbers.
-function humidityInfo(pct) {
-  if (pct == null) return null;
-  if (pct < 73) return { emoji: '🌤️', label: 'อากาศค่อนข้างแห้ง' };
-  if (pct <= 80) return { emoji: '💧', label: 'อากาศชื้นปานกลาง' };
-  return { emoji: '💧', label: 'อากาศชื้นตลอดทั้งเดือน' };
+function formatThaiDate(isoDate) {
+  if (!isoDate) return null;
+  const parts = isoDate.split('-');
+  if (parts.length !== 3) return null;
+
+  const year = parseInt(parts[0]) + 543;
+  const month = THAI_MONTHS_SHORT[parseInt(parts[1]) - 1];
+  const day = parseInt(parts[2]);
+  return `${day} ${month} ${year}`;
 }
 
-function rainDaysInfo(days) {
-  if (days == null) return null;
-  if (days < 4) return { emoji: '🌦️', label: 'ฝนตกไม่บ่อย' };
-  if (days <= 15) return { emoji: '🌧️', label: 'ฝนตกเป็นช่วงๆ' };
-  return { emoji: '⛈️', label: 'ฝนตกเกือบทุกวัน' };
-}
-
-// Temperature bands follow TMD's own official "เกณฑ์อากาศ" day-classification
-// (tmd.go.th/info/เกณฑ์อากาศ): hot >=35.0C, cool 16.0-22.9C. Applied here to
-// monthly-average min/max rather than a single day's reading.
-function tempEmoji(min, max) {
-  if (max == null) return '🌡️';
-  if (max >= 35) return '🥵';
-  if (max >= 32) return '☀️';
-  if (min != null && min < 23) return '🧥';
-  return '🌤️';
-}
-
-export default function ForecastDisplay({ initialProvince, forecastRows, actualRows }) {
+export default function ForecastDisplay({ initialProvince, forecastRows, actualRows, normalRows = [], todayRainfall = {} }) {
   const [selectedProvince, setSelectedProvince] = useState(initialProvince);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCompare, setShowCompare] = useState(false);
+  const [compareProvinces, setCompareProvinces] = useState([]);
+  const [selectedStation, setSelectedStation] = useState('all');
 
   const provinces = useMemo(() => {
     const uniqueProvinces = [];
@@ -135,17 +117,15 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     return { province: selectedProvince, year, actual: myActual, forecast: myForecast };
   }, [forecastRows, actualRows, selectedProvince]);
 
+  // ใช้เดือนล่าสุดที่มีผลพยากรณ์เสมอ
   const highlightForecast = useMemo(() => {
-    if (!data || !data.forecast || data.forecast.length === 0) return null;
+    if (!data || data.forecast.length === 0) return null;
 
     let latest = data.forecast[0];
-    let latestKey = latest.year * 12 + latest.month;
     for (let i = 1; i < data.forecast.length; i++) {
-      const current = data.forecast[i];
-      const currentKey = current.year * 12 + current.month;
-      if (currentKey > latestKey) {
-        latest = current;
-        latestKey = currentKey;
+      const row = data.forecast[i];
+      if (row.year * 12 + row.month > latest.year * 12 + latest.month) {
+        latest = row;
       }
     }
     return latest;
@@ -158,12 +138,8 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
   const highlightTier = classifyRainLevel(highlightPercent);
   const highlightStyle = highlightTier.tw;
 
-  // highlightForecast is already picked as the latest month with a
-  // forecast result, so the label just names that month directly — not
-  // compared against the machine's real-world date, which would go blank
-  // as soon as the forecast data falls behind the actual calendar.
-  const highlightRelativeLabel = highlightForecast
-    ? `เดือน${THAI_MONTHS[highlightForecast.month - 1]}`
+  const highlightMonthName = highlightForecast
+    ? THAI_MONTHS[highlightForecast.month - 1]
     : null;
 
   let highlightDiffMm = null;
@@ -171,111 +147,146 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     highlightDiffMm = Number(highlightForecast.predicted_rain) - Number(highlightForecast.baseline_mean);
   }
 
+  const monthlyNormals = useMemo(() => {
+    const result = {};
+    for (let i = 0; i < normalRows.length; i++) {
+      const row = normalRows[i];
+      if (row.province !== selectedProvince) continue;
+      if (row.baseline_mean == null) continue;
+      result[row.month] = Number(row.baseline_mean);
+    }
+    return result;
+  }, [normalRows, selectedProvince]);
+
+  let normalChartData = [];
+  if (highlightForecast) {
+    normalChartData = buildNormalChartData(monthlyNormals, highlightForecast.month);
+  }
+
+  let highlightRangeText = null;
+  if (
+    highlightForecast &&
+    highlightForecast.predicted_rain_lower != null &&
+    highlightForecast.predicted_rain_upper != null
+  ) {
+    highlightRangeText = `${formatMm(highlightForecast.predicted_rain_lower)} – ${formatMm(highlightForecast.predicted_rain_upper)} มม.`;
+  }
+
   let highlightSummarySentence = null;
   if (highlightForecast) {
-    const parts = [];
-    const days = highlightForecast.normal_rain_days;
-    if (days != null) {
-      const daysRounded = Math.round(days);
-      if (days > 15) parts.push(`ฝนตกบ่อย เฉลี่ย ${daysRounded} วัน/เดือน`);
-      else if (days >= 4) parts.push(`ฝนตกเป็นช่วงๆ เฉลี่ย ${daysRounded} วัน/เดือน`);
-      else parts.push(`ฝนตกไม่บ่อย เฉลี่ย ${daysRounded} วัน/เดือน`);
-    }
-    const humidity = highlightForecast.humidity_mean;
-    if (humidity != null) {
-      const humidityRounded = Math.round(humidity);
-      if (humidity > 80) parts.push(`ชื้นตลอดทั้งเดือน เฉลี่ย ${humidityRounded}%`);
-      else if (humidity < 73) parts.push(`อากาศค่อนข้างแห้ง เฉลี่ย ${humidityRounded}%`);
-    }
+    highlightSummarySentence = buildSummarySentence(
+      selectedProvince,
+      highlightMonthName,
+      highlightForecast,
+      highlightDiffMm,
+      highlightRangeText
+    );
+  }
 
-    if (parts.length > 0 && highlightForecast.month != null) {
-      const monthName = THAI_MONTHS[highlightForecast.month - 1];
-      if (parts.length === 1) {
-        highlightSummarySentence = `โดยทั่วไปเดือน${monthName}มักมีแนวโน้ม${parts[0]}`;
-      } else {
-        highlightSummarySentence = `โดยทั่วไปเดือน${monthName}มักมีแนวโน้ม${parts.slice(0, -1).join(' ')} และ${parts[parts.length - 1]}`;
+  const provinceRainfall = todayRainfall[selectedProvince];
+  let currentRain = null;
+  if (provinceRainfall && provinceRainfall.stationCount > 0) {
+    currentRain = provinceRainfall;
+  }
+
+
+  let selectedStationData = null;
+  if (currentRain && selectedStation !== 'all' && currentRain.stations) {
+    for (let i = 0; i < currentRain.stations.length; i++) {
+      const station = currentRain.stations[i];
+      if (station.name === selectedStation) {
+        selectedStationData = station;
+        break;
       }
     }
   }
+
+  let displayRainfall = null;
+  let displayRainfallText = '';
+  if (currentRain) {
+    if (selectedStationData) {
+      displayRainfall = selectedStationData.rainfall;
+      displayRainfallText = selectedStationData.name;
+    } else {
+      displayRainfall = currentRain.average;
+      displayRainfallText = `ค่าเฉลี่ยจาก ${currentRain.stationCount} สถานี`;
+    }
+  }
+
+  const stationOptions = [];
+  if (currentRain && currentRain.stations) {
+    for (let i = 0; i < currentRain.stations.length; i++) {
+      const station = currentRain.stations[i];
+      stationOptions.push(
+        <option key={station.name} value={station.name}>
+          {station.name}
+        </option>
+      );
+    }
+  }
+
+  const compareList = useMemo(() => {
+    const list = [selectedProvince];
+    for (let i = 0; i < compareProvinces.length; i++) {
+      if (compareProvinces[i] !== selectedProvince) list.push(compareProvinces[i]);
+    }
+    return list;
+  }, [selectedProvince, compareProvinces]);
+
+  const isComparing = compareProvinces.length > 0;
+
+  const compareChartData = useMemo(() => {
+    if (!isComparing || !data) return [];
+    return buildCompareChartData(compareList, forecastRows, actualRows, data.year);
+  }, [isComparing, compareList, forecastRows, actualRows, data]);
 
   const chartData = useMemo(() => {
     if (!data) return [];
 
     const actualByMonth = {};
-    for (let i = 0; i < data.actual.length; i++) {
-      actualByMonth[data.actual[i].month] = data.actual[i];
-    }
-
     const forecastByMonth = {};
-    for (let i = 0; i < data.forecast.length; i++) {
-      forecastByMonth[data.forecast[i].month] = data.forecast[i];
-    }
-
-    let lastForecastMonth = data.forecast[0].month;
-    for (let i = 1; i < data.forecast.length; i++) {
-      if (data.forecast[i].month > lastForecastMonth) {
-        lastForecastMonth = data.forecast[i].month;
-      }
-    }
-
-    let firstForecastMonth = data.forecast[0].month;
-    for (let i = 1; i < data.forecast.length; i++) {
-      if (data.forecast[i].month < firstForecastMonth) {
-        firstForecastMonth = data.forecast[i].month;
-      }
-    }
-
     let lastActualMonth = 0;
+    let lastMonth = 0;
+
     for (let i = 0; i < data.actual.length; i++) {
-      if (data.actual[i].month > lastActualMonth) {
-        lastActualMonth = data.actual[i].month;
+      const row = data.actual[i];
+      actualByMonth[row.month] = row;
+      if (row.month > lastActualMonth) {
+        lastActualMonth = row.month;
       }
     }
 
-    const months = [];
-    for (let month = 1; month <= lastForecastMonth; month++) {
-      months.push(month);
+    lastMonth = lastActualMonth;
+
+    for (let i = 0; i < data.forecast.length; i++) {
+      const row = data.forecast[i];
+      forecastByMonth[row.month] = row;
+      if (row.month > lastMonth) {
+        lastMonth = row.month;
+      }
     }
 
     const result = [];
-    for (let i = 0; i < months.length; i++) {
-      const month = months[i];
+    for (let month = 1; month <= lastMonth; month++) {
       const actualRow = actualByMonth[month];
       const forecastRow = forecastByMonth[month];
 
-      let isBridge = false;
-      if (month === lastActualMonth && lastActualMonth < lastForecastMonth) {
-        isBridge = true;
-      }
-      const isBridgeSegment = isBridge || month === firstForecastMonth;
-
       let actualValue = null;
+      let forecastValue = null;
+      let forecastRange = null;
+
       if (actualRow) {
         actualValue = Number(actualRow.average_rain);
       }
 
-      let forecastValue = null;
-      if (forecastRow) {
+      if (month === lastActualMonth && actualRow) {
+        forecastValue = Number(actualRow.average_rain);
+        forecastRange = [forecastValue, forecastValue];
+      } else if (forecastRow && month > lastActualMonth) {
         forecastValue = Number(forecastRow.predicted_rain);
-      }
-
-      let connectorValue = null;
-      if (isBridgeSegment) {
-        if (forecastRow) {
-          connectorValue = Number(forecastRow.predicted_rain);
-        } else if (actualRow) {
-          connectorValue = Number(actualRow.average_rain);
+        if (forecastRow.predicted_rain_lower != null && forecastRow.predicted_rain_upper != null) {
+          forecastRange = [Number(forecastRow.predicted_rain_lower), Number(forecastRow.predicted_rain_upper)];
         }
-      }
-
-      let forecastRange = null;
-      if (forecastRow) {
-        forecastRange = [Number(forecastRow.predicted_rain_lower), Number(forecastRow.predicted_rain_upper)];
-      }
-
-      let horizon = null;
-      if (forecastRow) {
-        horizon = forecastRow.horizon_months;
       }
 
       result.push({
@@ -283,46 +294,49 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
         label: THAI_MONTHS_SHORT[month - 1],
         actual: actualValue,
         forecast: forecastValue,
-        connector: connectorValue,
         forecastRange,
-        horizon,
       });
     }
 
     return result;
   }, [data]);
 
-  const verifiedMonths = useMemo(() => {
-    if (!data) return [];
+  const compareLines = [];
+  if (isComparing) {
+    for (let i = 0; i < compareList.length; i++) {
+      const province = compareList[i];
+      const color = COMPARE_COLORS[i % COMPARE_COLORS.length];
 
-    const actualByMonth = {};
-    for (let i = 0; i < data.actual.length; i++) {
-      actualByMonth[data.actual[i].month] = data.actual[i];
+      compareLines.push(
+        <Line
+          key={province + '_actual'}
+          type="monotone"
+          dataKey={province + '_actual'}
+          name={province}
+          stroke={color}
+          strokeWidth={2.5}
+          dot={{ r: 3, fill: color }}
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+      );
+      compareLines.push(
+        <Line
+          key={province + '_forecast'}
+          type="monotone"
+          dataKey={province + '_forecast'}
+          name={province + ' (แนวโน้ม)'}
+          stroke={color}
+          strokeWidth={2.5}
+          strokeDasharray="7 4"
+          dot={{ r: 4, fill: '#fff', stroke: color, strokeWidth: 2 }}
+          connectNulls={true}
+          legendType="none"
+          isAnimationActive={false}
+        />
+      );
     }
-
-    const result = [];
-    for (let i = 0; i < data.forecast.length; i++) {
-      const forecastRow = data.forecast[i];
-      const actualRow = actualByMonth[forecastRow.month];
-      if (!actualRow) continue;
-
-      const actualPct = percentOfNormal(Number(actualRow.average_rain), actualRow.baseline_mean);
-      const forecastPct = percentOfNormal(Number(forecastRow.predicted_rain), forecastRow.baseline_mean);
-      const actualTier = classifyRainLevel(actualPct);
-      const forecastTier = classifyRainLevel(forecastPct);
-
-      result.push({
-        month: forecastRow.month,
-        label: THAI_MONTHS_SHORT[forecastRow.month - 1],
-        actualLabel: actualTier.label,
-        forecastLabel: forecastTier.label,
-        actualPercent: actualPct,
-        forecastPercent: forecastPct,
-        matched: actualTier.tier === forecastTier.tier,
-      });
-    }
-    return result;
-  }, [data]);
+  }
 
   const provinceOptions = [];
   for (let i = 0; i < regionOrder.length; i++) {
@@ -339,46 +353,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       <optgroup key={region} label={region}>
         {options}
       </optgroup>
-    );
-  }
-
-  const verifiedRows = [];
-  for (let i = 0; i < verifiedMonths.length; i++) {
-    const v = verifiedMonths[i];
-
-    let badgeClass = 'text-[11px] font-bold px-2.5 py-1 rounded-full ';
-    let badgeLabel;
-    if (v.matched) {
-      badgeClass += 'bg-emerald-100 text-emerald-700';
-      badgeLabel = 'ระดับตรงกัน';
-    } else {
-      badgeClass += 'bg-red-100 text-red-700';
-      badgeLabel = 'ระดับไม่ตรงกัน';
-    }
-
-    let forecastPercentText = '';
-    if (v.forecastPercent != null) {
-      forecastPercentText = ` (${v.forecastPercent.toFixed(0)}%)`;
-    }
-
-    let actualPercentText = '';
-    if (v.actualPercent != null) {
-      actualPercentText = ` (${v.actualPercent.toFixed(0)}%)`;
-    }
-
-    verifiedRows.push(
-      <div key={v.month} className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl">
-        <span className="text-xs font-bold text-slate-600 w-16">{v.label}</span>
-        <span className="text-xs text-slate-500 flex-1">
-          แนวโน้มปริมาณน้ำฝน: {v.forecastLabel}
-          {forecastPercentText}
-          {" · "}จริง: {v.actualLabel}
-          {actualPercentText}
-        </span>
-        <span className={badgeClass}>
-          {badgeLabel}
-        </span>
-      </div>
     );
   }
 
@@ -428,7 +402,11 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
             <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 transition-all focus-within:bg-white focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
               <select
                 value={selectedProvince}
-                onChange={(e) => { setSelectedProvince(e.target.value); setSearchQuery(''); }}
+                onChange={(e) => {
+                        setSelectedProvince(e.target.value);
+                        setSearchQuery(''); 
+                        setSelectedStation('all');
+                        }}
                 className="flex-1 bg-transparent py-3 text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer w-full"
               >
                 {provinceOptions}
@@ -458,7 +436,8 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
               <CompareRainfallDisplay
                 selectedProvince={selectedProvince}
                 forecastRows={forecastRows}
-                actualRows={actualRows}
+                compareProvinces={compareProvinces}
+                onChangeCompareProvinces={setCompareProvinces}
               />
             </div>
           )}
@@ -472,164 +451,253 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       ) : (
         <>
           {highlightForecast && (
-            <div className={`rounded-2xl border shadow-sm overflow-hidden ${highlightStyle.border}`}>
-              <div className={`px-6 py-5 ${highlightStyle.bg}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[12px] font-bold text-slate-700 uppercase tracking-widest">
-                    {/* 🌧️ ปริมาณน้ำฝนคาดการณ์{highlightRelativeLabel ? ` ${highlightRelativeLabel}` : ''} */}
-                    🌧️ ปริมาณน้ำฝนคาดการณ์ เดือนตุลาคม
-                  </span>
-                </div>
-                <p className="text-xl font-black text-slate-800 leading-tight">
-                  {THAI_MONTHS[highlightForecast.month - 1]} {data.year + 543}
-                </p>
-                <p className="text-[42px] font-black text-slate-800 leading-none mt-1">
-                  {Number(highlightForecast.predicted_rain).toFixed(1)}
-                  <span className="text-[18px] font-bold text-slate-400 ml-1">มม.</span>
-                </p>
+            <div className={`rounded-2xl border shadow-sm p-6 ${highlightStyle.border} ${highlightStyle.bg}`}>
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-6 items-start">
 
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${highlightStyle.badge}`}>
-                    {highlightTier.label}
-                  </span>
-                  {highlightDiffMm != null && (
-                    <span className={`text-xs font-bold ${highlightStyle.text}`}>
-                      {highlightDiffMm >= 0 ? '↑' : '↓'} {Math.abs(highlightDiffMm).toFixed(1)} มม. จากค่าเฉลี่ย
+                <div>
+                  <p className="text-[12px] font-bold text-slate-500 tracking-wide">
+                    🌧️ แนวโน้มปริมาณน้ำฝน
+                  </p>
+                  <p className="text-xl font-black text-slate-700 leading-tight mt-1">
+                    {highlightMonthName} {data.year + 543}
+                  </p>
+                  <p className="text-[44px] font-black text-slate-800 leading-none mt-1">
+                    {formatMm(highlightForecast.predicted_rain)}
+                    <span className="text-[18px] font-bold text-slate-400 ml-1">มม.</span>
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${highlightStyle.badge}`}>
+                      {highlightTier.label}
                     </span>
+                    {highlightDiffMm != null && (
+                      <span className={`text-xs font-bold ${highlightStyle.text}`}>
+                        {highlightDiffMm >= 0 ? '↑' : '↓'} {formatMm(Math.abs(highlightDiffMm))} มม. จากค่าปกติ
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-row lg:flex-col gap-6 lg:gap-5">
+                  {monthlyNormals[highlightForecast.month] != null && (
+                    <div>
+                      <p className="text-xs text-slate-500">ค่าปกติของเดือนนี้</p>
+                      <p className="text-lg font-black text-slate-800 mt-0.5">
+                        {formatMm(monthlyNormals[highlightForecast.month])}
+                        <span className="text-xs font-bold text-slate-400 ml-1">มม.</span>
+                      </p>
+                    </div>
+                  )}
+                  {highlightRangeText && (
+                    <div>
+                      <p className="text-xs text-slate-500">ช่วงแนวโน้มปริมาณน้ำฝน</p>
+                      <p className="text-lg font-black text-slate-800 mt-0.5">{highlightRangeText}</p>
+                    </div>
                   )}
                 </div>
 
                 {highlightSummarySentence && (
-                  <p className="text-sm text-slate-600 mt-3 pt-3 border-t border-black/10">
-                    {highlightSummarySentence}
-                  </p>
-                )}
-              </div>
-
-            </div>
-          )}
-
-          {highlightForecast && (highlightForecast.humidity_mean != null || highlightForecast.normal_rain_days != null || highlightForecast.temp_max != null) && (
-            <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
-                <h3 className="text-slate-800 font-bold text-sm"> สภาพอากาศปกติของ{data.province}ในเดือน{THAI_MONTHS[highlightForecast.month - 1]}</h3>
-
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-6">
-                {highlightForecast.temp_max != null && (
-                  <div className="flex flex-col items-center text-center gap-2 p-5 rounded-2xl bg-amber-50 border border-amber-100">
-                    <span className="text-4xl leading-none">{tempEmoji(highlightForecast.temp_min, highlightForecast.temp_max)}</span>
-                    <span className="text-sm font-bold text-slate-700">
-                      อุณหภูมิอยู่ในช่วง{' '}
-                      {highlightForecast.temp_min != null ? `${Math.round(highlightForecast.temp_min)}–` : ''}
-                      {Math.round(highlightForecast.temp_max)}°C
-                    </span>
+                  <div className="bg-white/70 border border-white rounded-xl p-4">
+                    <p className="text-xs font-bold text-slate-600 mb-1">สรุปภาพรวม</p>
+                    <p className="text-[13px] leading-relaxed text-slate-600">
+                      {highlightSummarySentence}
+                    </p>
                   </div>
                 )}
-                {highlightForecast.humidity_mean != null && (() => {
-                  const info = humidityInfo(highlightForecast.humidity_mean);
-                  return (
-                    <div className="flex flex-col items-center text-center gap-2 p-5 rounded-2xl bg-sky-50 border border-sky-100">
-                      <span className="text-4xl leading-none">{info.emoji}</span>
-                      <span className="text-sm font-bold text-slate-700">{info.label}</span>
-                      <span className="text-xs text-slate-400">ความชื้นเฉลี่ย {Math.round(highlightForecast.humidity_mean)}%</span>
-                    </div>
-                  );
-                })()}
-                {highlightForecast.normal_rain_days != null && (() => {
-                  const info = rainDaysInfo(highlightForecast.normal_rain_days);
-                  return (
-                    <div className="flex flex-col items-center text-center gap-2 p-5 rounded-2xl bg-indigo-50 border border-indigo-100">
-                      <span className="text-4xl leading-none">{info.emoji}</span>
-                      <span className="text-sm font-bold text-slate-700">{info.label}</span>
-                      <span className="text-xs text-slate-400">{Math.round(highlightForecast.normal_rain_days)} วัน/เดือน</span>
-                    </div>
-                  );
-                })()}
+
               </div>
-              <p className="text-[11px] text-slate-400 px-6 pb-4">
-                ค่าเฉลี่ย 30 ปี (พ.ศ. 2524–2553) จาก{' '}
-                <a href="https://data.tmd.go.th/api/index1.php" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">
-                  กรมอุตุนิยมวิทยา (TMD)
-                </a>
-              </p>
             </div>
           )}
 
-          <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
-            <h3 className="text-slate-800 font-bold text-sm mb-1">
-              ปริมาณน้ำฝนรายเดือน {data.province} — ปี {data.year + 543}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-slate-800 font-bold text-sm">
+              {isComparing
+                ? `เปรียบเทียบแนวโน้มปริมาณน้ำฝนระหว่างจังหวัด — ปี ${data.year + 543}`
+                : `แนวโน้มปริมาณน้ำฝน ${data.province} — ปี ${data.year + 543}`}
             </h3>
-            
+            {isComparing && (
+              <p className="text-xs text-slate-400 mt-0.5 mb-2">
+                {`เส้นทึบคือฝนจริง เส้นประคือค่าพยากรณ์ · ${compareList.join(' · ')}`}
+              </p>
+            )}
+            {/* <p className="text-xs text-slate-400 mt-0.5 mb-2">
+              เปรียบเทียบข้อมูลฝนจริงกับค่าพยากรณ์รายเดือน พร้อมช่วงที่ค่าพยากรณ์อาจคลาดเคลื่อน
+            </p> */}
 
             <ResponsiveContainer width="100%" height={320}>
-              <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+              <ComposedChart data={isComparing ? compareChartData : chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} />
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} label={{ value: 'มม.', angle: -90, position: 'insideLeft', fontSize: 11 }} />
                 <Tooltip formatter={tooltipFormatter} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
 
-                <Area
-                  dataKey="forecastRange"
-                  name="ค่าอาจคลาดเคลื่อนอยู่ในช่วงนี้"
-                  stroke="none"
-                  fill="#c4b5fd"
-                  fillOpacity={0.12}
-                  connectNulls={true}
-                />
+                {isComparing && compareLines}
 
-                <Line
-                  type="monotone"
-                  dataKey="actual"
-                  name="ปริมาณฝนจริง"
-                  stroke="#f97316"
-                  strokeWidth={2.5}
-                  dot={{ r: 4, fill: '#f97316' }}
-                  connectNulls={false}
-                />
+                {!isComparing && (
+                  <Area
+                    dataKey="forecastRange"
+                    name="ช่วงคาดการณ์"
+                    stroke="none"
+                    fill="#fb923c"
+                    fillOpacity={0.25}
+                    connectNulls={true}
+                    isAnimationActive={false}
+                  />
+                )}
 
-                <Line
-                  type="monotone"
-                  dataKey="connector"
-                  stroke="#8b5cf6"
-                  strokeWidth={2.5}
-                  strokeDasharray="7 4"
-                  dot={false}
-                  connectNulls={true}
-                  legendType="none"
-                  tooltipType="none"
-                />
+                {!isComparing && (
+                  <Line
+                    type="monotone"
+                    dataKey="actual"
+                    name="ปริมาณฝนจริง"
+                    stroke="#2563eb"
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: '#2563eb' }}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                )}
 
-                <Line
-                  type="monotone"
-                  dataKey="forecast"
-                  name="แนวโน้มปริมาณน้ำฝน"
-                  stroke="#8b5cf6"
-                  strokeWidth={2.5}
-                  strokeDasharray="7 4"
-                  dot={{ r: 5, fill: '#fff', stroke: '#8b5cf6', strokeWidth: 2 }}
-                  connectNulls={true}
-                />
+                {!isComparing && (
+                  <Line
+                    type="monotone"
+                    dataKey="forecast"
+                    name="ค่าแนวโน้มปริมาณน้ำฝน"
+                    stroke="#f97316"
+                    strokeWidth={2.5}
+                    strokeDasharray="7 4"
+                    dot={{ r: 5, fill: '#fff', stroke: '#f97316', strokeWidth: 2 }}
+                    connectNulls={true}
+                    isAnimationActive={false}
+                  />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
 
-          {/* {verifiedMonths.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-100 bg-slate-50">
-                <h3 className="text-slate-800 font-bold text-sm">ตรวจสอบความแม่นยำของค่าพยากรณ์</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  เทียบ "ระดับ" ตามดัชนีร้อยละของค่าปกติ ระหว่างสิ่งที่เคยพยากรณ์ไว้กับข้อมูลจริงที่เกิดขึ้นภายหลัง
-                  — ตรงกันแปลว่าอยู่ในช่วงเดียวกัน ไม่ได้แปลว่าตัวเลขตรงเป๊ะ
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-slate-800 font-bold text-sm">
+              ฝนที่ตรวจวัดวันนี้ใน{data.province}
+            </h3>
+            {currentRain ? (
+              <>
+                <div className="flex flex-wrap items-baseline justify-between gap-2 mt-0.5">
+                  <p className="text-xs text-slate-400">
+                    ข้อมูลวันที่ {formatThaiDate(currentRain.date)} จากสถานีตรวจวัด {currentRain.stationCount} สถานี
+                  </p>
+                  {/* {formatThaiDateTime(currentRain.latestTime) && (
+                    <p className="text-xs text-slate-400">
+                      อัปเดตล่าสุด {formatThaiDateTime(currentRain.latestTime)}
+                    </p>
+                  )} */}
+                </div>
+
+                {currentRain.stations && currentRain.stations.length > 0 && (
+                  <div className="mt-4">
+                    <label className="text-xs text-slate-500">เลือกสถานีตรวจวัด</label>
+                    <select
+                      value={selectedStation}
+                      onChange={(e) => setSelectedStation(e.target.value)}
+                      className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 outline-none"
+                    >
+                      <option value="all">ค่าเฉลี่ยทุกสถานี</option>
+                      {stationOptions}
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <p className="text-2xl font-black text-slate-800 leading-none">
+                      {formatMm(displayRainfall)}
+                      <span className="text-xs font-bold text-slate-400 ml-1">มม.</span>
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1.5">{displayRainfallText}</p>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <p className="text-2xl font-black text-slate-800 leading-none">
+                      {formatMm(currentRain.max)}
+                      <span className="text-xs font-bold text-slate-400 ml-1">มม.</span>
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1.5">ค่าสูงสุดที่ตรวจวัด</p>
+                    {currentRain.maxStation && (
+                      <p className="text-xs font-bold text-slate-600">{currentRain.maxStation}</p>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-400 mt-3">
+                  ข้อมูลจาก{' '}
+                  <a href="https://www.thaiwater.net/" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">
+                    คลังข้อมูลน้ำแห่งชาติ (thaiwater.net)
+                  </a>
                 </p>
+              </>
+            ) : (
+              <p className="text-xs text-slate-400 mt-1">ยังไม่มีข้อมูลตรวจวัดวันนี้</p>
+            )}
+          </div>
+
+          {highlightForecast && normalChartData.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-slate-800 font-bold text-sm">
+                    ปริมาณฝนตามปกติของ{data.province} ตลอดปี
+                  </h3>
+                  {/* <p className="text-xs text-slate-500 mt-0.5">
+                    {normalHeadline}
+                  </p> */}
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  {monthlyNormals[highlightForecast.month] != null && (
+                    <div className="bg-slate-50 rounded-xl px-4 py-2.5">
+                      <p className="text-[11px] text-slate-500">ค่าปกติเดือน{highlightMonthName}</p>
+                      <p className="text-base font-black text-slate-800">
+                        {formatMm(monthlyNormals[highlightForecast.month])}
+                        <span className="text-[11px] font-bold text-slate-400 ml-1">มม.</span>
+                      </p>
+                    </div>
+                  )}
+                  {highlightForecast.normal_rain_days != null && (
+                    <div className="bg-slate-50 rounded-xl px-4 py-2.5">
+                      <p className="text-[11px] text-slate-500">วันฝนตกเฉลี่ย</p>
+                      <p className="text-base font-black text-slate-800">
+                        {Math.round(highlightForecast.normal_rain_days)}
+                        <span className="text-[11px] font-bold text-slate-400 ml-1">วัน/เดือน</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="p-5 space-y-2">
-                {verifiedRows}
-              </div>
+
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={normalChartData} margin={{ top: 20, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={44} />
+                  <Tooltip formatter={(value) => [`${value} มม.`, 'ค่าปกติ']} />
+                  <Bar dataKey="normal" stackId="normal" fill="#bfdbfe" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                  <Bar dataKey="highlight" stackId="normal" fill="#1d4ed8" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                </BarChart>
+              </ResponsiveContainer>
+
+              <p className="text-[11px] text-slate-400 mt-3">
+                ค่าปกติปริมาณฝนรายเดือนเชิงพื้นที่ที่ใช้ในระบบ
+                {highlightForecast.normal_rain_days != null && (
+                  <>
+                    {' · '}วันฝนตกเป็นค่าเฉลี่ย พ.ศ. 2544–2563 จาก{' '}
+                    <a href="https://data.tmd.go.th/api/index1.php" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">
+                      กรมอุตุนิยมวิทยา (TMD)
+                    </a>
+                  </>
+                )}
+              </p>
             </div>
-          )} */}
-      
+          )}
+
         </>
       )}
     </div>

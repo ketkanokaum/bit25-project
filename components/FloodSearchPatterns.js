@@ -12,9 +12,6 @@ import EmojiObjectsIcon from "@mui/icons-material/EmojiObjects";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import PlaceIcon from "@mui/icons-material/Place";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import { provinceRegions, regionOrder } from "@/lib/constants/provinces";
 import { groupReportedAreas } from "@/lib/flood-areas";
 import { percentOfNormal, classifyRainLevel } from "@/lib/rainlevel";
@@ -33,7 +30,7 @@ import {
   SEARCH_LABELS,
   getMonitoringLevelInfo,
   getMonitoringLevel,
-  KEYWORD_ELEVATED,
+  KEYWORD_ABOVE_THRESHOLD,
   ASSESSMENT_HISTORICAL_ONLY,
   METHOD_MODEL,
   OFFICIAL_SOURCES,
@@ -51,6 +48,16 @@ import {
   ReferenceLine,
   ReferenceArea,
 } from "recharts";
+// Leaflet ทำงานบนเบราว์เซอร์อย่างเดียว ต้องปิด ssr
+const FloodAreaMapView = dynamic(() => import("@/components/FloodAreaMapView"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full flex items-center justify-center text-slate-400 text-sm font-bold">
+      กำลังโหลดแผนที่...
+    </div>
+  ),
+});
+
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false,
   loading: () => (
@@ -127,7 +134,7 @@ function asArray(x) {
 }
 
 const CHART_LEVEL_VALUE = { low: 1, medium: 2, high: 3 };
-const CHART_LEVEL_LABEL = { 1: "เฝ้าระวังต่ำ", 2: "เฝ้าระวังปานกลาง", 3: "เฝ้าระวังสูง" };
+const CHART_LEVEL_LABEL = { 1: "สถานการณ์ปกติ", 2: "เฝ้าระวังปานกลาง", 3: "เฝ้าระวังสูง" };
 const CHART_AXIS_LABEL = { 0: "", 1: "ต่ำ", 2: "ปานกลาง", 3: "สูง" };
 const CHART_ACTUAL_FLOOD = 3;
 const HISTORICAL_FLOOD_YES = 1;
@@ -200,6 +207,152 @@ function monthWindowTooltipFormatter(value, name) {
   return [value, name];
 }
 
+
+const RULE_TO_FIELD = {
+  Search_น้ำท่วม: "search_flood",
+  Search_ฝนตก: "search_rain",
+  Search_พายุ: "search_storm",
+  Search_ระดับน้ำ: "search_water_level",
+  Search_สถานการณ์น้ำ: "search_water_situation",
+  Search_อพยพ: "search_evacuate",
+};
+
+function getRulesForMonth(rules, province, year, month) {
+  const result = [];
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
+    if (
+      rule.province === province &&
+      parseInt(rule.year) === parseInt(year) &&
+      parseInt(rule.month) === parseInt(month)
+    ) {
+      result.push(rule);
+    }
+  }
+  result.sort((a, b) => (a.confidence || 0) - (b.confidence || 0));
+  return result;
+}
+
+function buildCurrentLevels(searchDetail, monthRow, baseline) {
+  const levels = {};
+
+  for (let i = 0; i < SEARCH_FIELDS.length; i++) {
+    const field = SEARCH_FIELDS[i];
+    let isHigh = false;
+
+    if (searchDetail) {
+      for (let j = 0; j < searchDetail.terms.length; j++) {
+        const term = searchDetail.terms[j];
+        if (term.field === field) {
+          isHigh = term.isHigh;
+          break;
+        }
+      }
+    }
+
+    levels[field] = isHigh ? "High" : "NotHigh";
+  }
+
+  let rainHigh = false;
+  if (
+    monthRow &&
+    monthRow.average_rain != null &&
+    baseline.value != null &&
+    baseline.value !== 0
+  ) {
+    const rain = parseFloat(monthRow.average_rain);
+    const percent = (rain / baseline.value) * 100;
+    rainHigh = percent > 110;
+  }
+  levels.rain = rainHigh ? "High" : "NotHigh";
+
+  return levels;
+}
+
+function mergeSameRules(rules) {
+  const grouped = {};
+  const keys = [];
+
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
+    const antecedents = asArray(rule.antecedents);
+    const consequents = asArray(rule.consequents);
+    const key = antecedents.join(",") + "=>" + consequents.join(",");
+
+    if (!grouped[key]) {
+      grouped[key] = {
+        antecedents: antecedents,
+        consequents: consequents,
+        confidenceSum: 0,
+        count: 0,
+      };
+      keys.push(key);
+    }
+
+    grouped[key].confidenceSum += rule.confidence || 0;
+    grouped[key].count++;
+  }
+
+  const result = [];
+  for (let i = 0; i < keys.length; i++) {
+    const item = grouped[keys[i]];
+    result.push({
+      antecedents: item.antecedents,
+      consequents: item.consequents,
+      confidence: item.confidenceSum / item.count,
+    });
+  }
+  return result;
+}
+
+function isRuleItemHigh(item, levels) {
+  if (item === "rain_level_High") {
+    return levels.rain === "High";
+  }
+  const field = RULE_TO_FIELD[item];
+  if (!field) {
+    return false;
+  }
+  return levels[field] === "High";
+}
+
+function isRuleMatched(rule, levels) {
+  const antecedents = asArray(rule.antecedents);
+  const consequents = asArray(rule.consequents);
+
+  for (let i = 0; i < antecedents.length; i++) {
+    if (!isRuleItemHigh(antecedents[i], levels)) return false;
+  }
+  for (let i = 0; i < consequents.length; i++) {
+    if (!isRuleItemHigh(consequents[i], levels)) return false;
+  }
+  return true;
+}
+
+function getMatchingRules(rules, levels) {
+  const mergedRules = mergeSameRules(rules);
+  const result = [];
+
+  for (let i = 0; i < mergedRules.length; i++) {
+    if (isRuleMatched(mergedRules[i], levels)) {
+      result.push(mergedRules[i]);
+    }
+  }
+
+  result.sort((a, b) => (a.confidence || 0) - (b.confidence || 0));
+  return result;
+}
+
+function filterRulesByConfidence(rules, threshold) {
+  const result = [];
+  for (let i = 0; i < rules.length; i++) {
+    if ((rules[i].confidence || 0) >= threshold) {
+      result.push(rules[i]);
+    }
+  }
+  return result;
+}
+
 export default function FloodSearchPatterns({ initialData = [], initialRules = [], initialFloodEvents = [] }) {
   const [isClient, setIsClient] = useState(false);
   const data = initialData;
@@ -216,15 +369,9 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
   const [selectedMonth, setSelectedMonth] = useState(1);
 
   useEffect(() => {
- 
-    let targetYear = boundaries.searchEndYear;
-    let targetMonth = boundaries.searchEndMonth;
-
-    if (!targetYear || targetYear < REAL_DATA_YEARS[0]) {
-      const now = new Date();
-      targetYear = now.getFullYear();
-      targetMonth = now.getMonth() + 1;
-    }
+    const now = new Date();
+    let targetYear = now.getFullYear();
+    let targetMonth = now.getMonth() + 1;
 
     if (targetYear > boundaries.lastSelectableYear) {
       targetYear = boundaries.lastSelectableYear;
@@ -236,6 +383,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
     setIsClient(true);
   }, []);
 
+  
   const provinceOptions = useMemo(() => {
     const names = Object.keys(provinceRegions);
     const options = [];
@@ -312,148 +460,32 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
     [data, selectedProvince, selectedMonth]
   );
 
-  const currentRules = useMemo(() => {
-    if (isForecastYear) return [];
-    const filtered = [];
-    for (let i = 0; i < rulesArray.length; i++) {
-      const r = rulesArray[i];
-      if (
-        r.province === selectedProvince &&
-        parseInt(r.year) === parseInt(selectedYear) &&
-        parseInt(r.month) === parseInt(selectedMonth)
-      ) {
-        filtered.push(r);
-      }
-    }
-    filtered.sort((a, b) => (a.confidence || 0) - (b.confidence || 0));
-    return filtered;
-  }, [rulesArray, selectedProvince, selectedYear, selectedMonth, isForecastYear]);
-
-  const antecedentToField = {
-    Search_น้ำท่วม: "search_flood",
-    Search_ฝนตก: "search_rain",
-    Search_พายุ: "search_storm",
-    Search_ระดับน้ำ: "search_water_level",
-    Search_สถานการณ์น้ำ: "search_water_situation",
-    Search_อพยพ: "search_evacuate",
-  };
-
   const targetSearchDetail = useMemo(
     () => getSearchDetail(data, selectedProvince, selectedYear, selectedMonth),
     [data, selectedProvince, selectedYear, selectedMonth]
   );
 
   const currentLevels = useMemo(() => {
-    const levels = {};
-    for (let f = 0; f < SEARCH_FIELDS.length; f++) {
-      const field = SEARCH_FIELDS[f];
-      let isHigh = false;
-      if (targetSearchDetail) {
-        const term = targetSearchDetail.terms.find((t) => t.field === field);
-        isHigh = !!(term && term.isHigh);
-      }
-      levels[field] = isHigh ? "High" : "NotHigh";
-    }
-
-    // เกณฑ์ฝน (>110% ของค่าปกติ) เป็นคนละกลไกจากคำค้นหา ไม่ได้เปลี่ยนตามรอบนี้
-    let rainLevelHigh = false;
-    if (monthRow && monthRow.average_rain != null && baseline.value != null && baseline.value !== 0) {
-      const rainValue = parseFloat(monthRow.average_rain);
-      const percent = (rainValue / baseline.value) * 100;
-      rainLevelHigh = percent > 110;
-    }
-    levels.rain = rainLevelHigh ? "High" : "NotHigh";
-
-    return levels;
+    return buildCurrentLevels(targetSearchDetail, monthRow, baseline);
   }, [targetSearchDetail, monthRow, baseline]);
 
-  const pendingRules = useMemo(() => {
-    if (!isForecastYear) return [];
-
-
-    const grouped = {};
-    const groupKeys = [];
-    for (let i = 0; i < rulesArray.length; i++) {
-      const r = rulesArray[i];
-      const key = asArray(r.antecedents).join(",") + "=>" + asArray(r.consequents).join(",");
-      if (!grouped[key]) {
-        grouped[key] = { antecedents: asArray(r.antecedents), consequents: asArray(r.consequents), confidenceSum: 0, count: 0 };
-        groupKeys.push(key);
-      }
-      grouped[key].confidenceSum += r.confidence || 0;
-      grouped[key].count += 1;
-    }
-
-    const merged = [];
-    for (let i = 0; i < groupKeys.length; i++) {
-      const e = grouped[groupKeys[i]];
-      merged.push({
-        antecedents: e.antecedents,
-        consequents: e.consequents,
-        confidence: e.confidenceSum / e.count,
-      });
-    }
-
-    function isItemHigh(item) {
-
-      if (item === "rain_level_High") {
-        return currentLevels.rain === "High";
-      }
-      const field = antecedentToField[item];
-      return !!field && currentLevels[field] === "High";
-    }
-
-    const matching = [];
-    for (let i = 0; i < merged.length; i++) {
-      const rule = merged[i];
-      let allHigh = true;
-      for (let j = 0; j < rule.antecedents.length; j++) {
-        if (!isItemHigh(rule.antecedents[j])) allHigh = false;
-      }
-
-      for (let j = 0; j < rule.consequents.length; j++) {
-        if (!isItemHigh(rule.consequents[j])) allHigh = false;
-      }
-      if (allHigh) matching.push(rule);
-    }
-    matching.sort((a, b) => a.confidence - b.confidence);
-    return matching;
-  }, [isForecastYear, rulesArray, currentLevels]);
-
-
-  const summaryMatchedRules = useMemo(() => {
-    return [...pendingRules].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
-  }, [pendingRules]);
-
-  const ruleCountInfo = useMemo(() => {
-    let source;
+  // ใช้ activeRules เป็นกฎชุดหลักตัวเดียว
+  const activeRules = useMemo(() => {
     if (isForecastYear) {
-      source = pendingRules;
-    } else {
-      source = currentRules;
+      return getMatchingRules(rulesArray, currentLevels);
     }
-    const total = source ? source.length : 0;
-    let shown = 0;
-    if (source) {
-      for (let i = 0; i < source.length; i++) {
-        if ((source[i].confidence || 0) >= confidenceThreshold) shown++;
-      }
-    }
-    return { total, shown };
-  }, [currentRules, pendingRules, isForecastYear, confidenceThreshold]);
+    return getRulesForMonth(rulesArray, selectedProvince, selectedYear, selectedMonth);
+  }, [isForecastYear, rulesArray, currentLevels, selectedProvince, selectedYear, selectedMonth]);
+
+  const visibleRules = filterRulesByConfidence(activeRules, confidenceThreshold);
+  const sortedRules = [...activeRules].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+  const ruleCountInfo = {
+    total: activeRules.length,
+    shown: visibleRules.length,
+  };
 
   const graphData = useMemo(() => {
-    let source;
-    if (isForecastYear) {
-      source = pendingRules;
-    } else {
-      source = currentRules;
-    }
-
-    const rulesForGraph = [];
-    for (let i = 0; i < source.length; i++) {
-      if ((source[i].confidence || 0) >= confidenceThreshold) rulesForGraph.push(source[i]);
-    }
+    const rulesForGraph = filterRulesByConfidence(activeRules, confidenceThreshold);
     rulesForGraph.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
 
@@ -493,7 +525,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       nodes.push(nodesById[nodeOrder[i]]);
     }
     return { nodes, links };
-  }, [currentRules, pendingRules, isForecastYear, confidenceThreshold]);
+  }, [activeRules, confidenceThreshold]);
 
   const realEvents = useMemo(() => {
     let years;
@@ -737,19 +769,27 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
         `อ้างอิงจากประวัติอุทกภัยของจังหวัดและเดือนเดียวกันในช่วง ` +
         `พ.ศ. ${REAL_DATA_YEARS[0] + 543}–${LAST_REAL_YEAR + 543}`;
     } else {
-      predictionCardSubtitle = "ประเมินจากประวัติอุทกภัยและพฤติกรรมการค้นหา";
+      predictionCardSubtitle = "ประเมินจากประวัติอุทกภัยและข้อมูลการค้นหา";
     }
   }
 
-  let predictionValueBlock;
-  if (isForecastYear) {
+let predictionValueBlock;
+if (isForecastYear) {
+  let displayLevel = "ไม่สามารถประเมินได้";
 
-    predictionValueBlock = (
-      <span className={`text-3xl font-black ${riskLevel ? riskLevel.tw.text : "text-slate-600"}`}>
-        {riskLevel ? riskLevel.label : "ไม่สามารถประเมินได้"}
-      </span>
-    );
-  } else {
+  if (riskLevel) {
+    if (riskLevel.key === "low") {
+      displayLevel = "สถานการณ์ปกติ";
+    } else {
+      displayLevel = riskLevel.label;
+    }
+  }
+  predictionValueBlock = (
+    <span className={`text-3xl font-black ${riskLevel ? riskLevel.tw.text : "text-slate-600"}`}>
+      {displayLevel}
+    </span>
+  );
+} else {
     let colorClass;
     if (matchedRealEvent) {
       colorClass = "text-orange-600";
@@ -884,24 +924,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
     effectLegendText = "มักพบการค้นหาคำนี้ในเดือนเดียวกัน";
   }
 
-  const visibleConfirmedRules = [];
-  for (let i = 0; i < currentRules.length; i++) {
-    if ((currentRules[i].confidence || 0) >= confidenceThreshold) visibleConfirmedRules.push(currentRules[i]);
-  }
-  const visiblePendingRules = [];
-  for (let i = 0; i < pendingRules.length; i++) {
-    if ((pendingRules[i].confidence || 0) >= confidenceThreshold) visiblePendingRules.push(pendingRules[i]);
-  }
-
-  // สถานะฝนของเดือนที่เลือก (ใช้ในกล่องกฎของปีย้อนหลัง และในประโยคสรุปผล
-  // summaryDetail) — ใช้เกณฑ์กลางตัวเดียวกับหน้าปริมาณน้ำฝนล่วงหน้า/ย้อนหลัง
-  // และการ์ดฝนด้านบน (lib/rainlevel.js): <80% ฝนน้อยกว่าปกติ · 80–110% อยู่ใน
-  // เกณฑ์ปกติ · >110% ฝนมากกว่าปกติ
-  // เดิมจุดนี้แบ่งเองด้วยขีด 100% กับ 110% ทำให้ช่วง 100–110% ขึ้นว่า "ฝนสูงกว่า
-  // ปกติเล็กน้อย" ทั้งที่มาตรฐานกลางถือว่ายังอยู่ในเกณฑ์ปกติ และไม่มีขอบล่าง
-  // 80% สำหรับ "ฝนน้อยกว่าปกติ" เลย
-  // สีของกล่องผูกกับ tier เดียวกันนี้ด้วย จะได้ไม่มีกรณีข้อความบอก "ปกติ"
-  // แต่กล่องเป็นสีเตือน (เดิมสีใช้ขีด 100% ส่วนข้อความใช้ 110% จึงขัดกันเองได้)
+  
   const rainTier =
     avgRain != null && baseline.value != null
       ? classifyRainLevel(percentOfNormal(parseFloat(monthRow.average_rain), baseline.value))
@@ -926,10 +949,10 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
 
   let ruleListSection;
   if (!isForecastYear) {
-    if (visibleConfirmedRules.length > 0) {
+    if (visibleRules.length > 0) {
       const cards = [];
-      for (let i = 0; i < visibleConfirmedRules.length; i++) {
-        const rule = visibleConfirmedRules[i];
+      for (let i = 0; i < visibleRules.length; i++) {
+        const rule = visibleRules[i];
         const antecedentLabels = translateWordList(asArray(rule.antecedents));
         const antecedentTags = [];
         for (let j = 0; j < antecedentLabels.length; j++) {
@@ -963,7 +986,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       ruleListSection = <div className="divide-y divide-slate-100">{cards}</div>;
     } else {
       let emptyMessage;
-      if (currentRules.length > 0) {
+      if (activeRules.length > 0) {
         emptyMessage = "ไม่พบรูปแบบที่ผ่านเกณฑ์ความสอดคล้องที่เลือกไว้";
       } else {
         emptyMessage = "ไม่พบรูปแบบความสัมพันธ์ของคำค้นหาในเดือนนี้";
@@ -978,10 +1001,10 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       );
     }
   } else {
-    if (visiblePendingRules.length > 0) {
+    if (visibleRules.length > 0) {
       const cards = [];
-      for (let i = 0; i < visiblePendingRules.length; i++) {
-        const rule = visiblePendingRules[i];
+      for (let i = 0; i < visibleRules.length; i++) {
+        const rule = visibleRules[i];
         const antecedentLabels = translateWordList(asArray(rule.antecedents));
         const consequentLabels = translateWordList(asArray(rule.consequents));
         const antecedentTags = [];
@@ -1023,7 +1046,7 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
       ruleListSection = <div className="divide-y divide-slate-100">{cards}</div>;
     } else {
       let emptyMessage;
-      if (pendingRules.length > 0) {
+      if (activeRules.length > 0) {
         emptyMessage = "ไม่พบรูปแบบที่ผ่านเกณฑ์ความสอดคล้องที่เลือกไว้";
       } else {
         emptyMessage = "ไม่พบรูปแบบที่ตรงกับข้อมูลจริงในเดือนนี้";
@@ -1091,56 +1114,6 @@ let historyRatioText;
 }
 
   // สร้างคำอธิบายจากคำค้น Google Trends ที่มีอยู่ในกฎความสัมพันธ์
-  const rulesForSummary = isForecastYear
-    ? visiblePendingRules
-    : visibleConfirmedRules;
-
-
-  let topRuleForSummary = null;
-  for (let i = 0; i < rulesForSummary.length; i++) {
-    const r = rulesForSummary[i];
-    if (!topRuleForSummary || (r.confidence || 0) > (topRuleForSummary.confidence || 0)) {
-      topRuleForSummary = r;
-    }
-  }
-
-  const searchKeywords = [];
-  if (topRuleForSummary) {
-    const ruleItems = [
-      ...asArray(topRuleForSummary.antecedents),
-      ...asArray(topRuleForSummary.consequents),
-    ];
-
-    for (let j = 0; j < ruleItems.length; j++) {
-      const item = ruleItems[j];
-
-      // เลือกเฉพาะคำค้นที่มีอยู่ในข้อมูล
-      if (item.startsWith("Search_")) {
-        const keyword = item.replace("Search_", "");
-
-        if (!searchKeywords.includes(keyword)) {
-          searchKeywords.push(keyword);
-        }
-      }
-    }
-  }
-
-  let patternNarrative = "";
-
-  if (searchKeywords.length > 0) {
-    const keywordText = searchKeywords
-      .map((word) => `“${word}”`)
-      .join(" และ ");
-    const topRuleConfidencePercent = Math.round((topRuleForSummary.confidence || 0) * 100);
-
-
-    patternNarrative =
-      ` นอกจากนี้ จากข้อมูลพฤติกรรมการค้นหาบน Google Trends พบรูปแบบความสัมพันธ์ระหว่างคำค้น ${keywordText} ` +
-      `โดยมีค่าความเชื่อมั่น ${topRuleConfidencePercent}%  ` +
-      `ซึ่งสะท้อนความสนใจในการติดตามข้อมูลเกี่ยวกับ` +
-      `สภาพอากาศและสถานการณ์น้ำภายในพื้นที่`;
-  }
-
 
   function joinThaiList(parts) {
     if (parts.length === 0) return "";
@@ -1149,126 +1122,11 @@ let historyRatioText;
     return `${parts.slice(0, -1).join(", ")} และ${parts[parts.length - 1]}`;
   }
 
-
   function ruleItemWord(item) {
     if (item === "rain_level_High") return "ปริมาณฝนสูงกว่าปกติ";
-    const field = antecedentToField[item];
+    const field = RULE_TO_FIELD[item];
     return field ? SEARCH_LABELS[field] : item;
   }
-
-  function anteItemPhrase(item) {
-    if (item === "rain_level_High") return "ปริมาณฝนสูงกว่าปกติ";
-    return `การค้นหา “${ruleItemWord(item)}” อยู่ในระดับสูง`;
-  }
-  function consItemPhrase(item) {
-    if (item === "rain_level_High") return "ปริมาณฝนสูงกว่าปกติ";
-    return `การค้นหา “${ruleItemWord(item)}” สูง`;
-  }
-
-
-  function describeAntecedents(items) {
-    if (items.includes("rain_level_High")) {
-      return joinThaiList(items.map(anteItemPhrase));
-    }
-    const words = items.map((item) => `“${ruleItemWord(item)}”`);
-    return `การค้นหา ${joinThaiList(words)} อยู่ในระดับสูง`;
-  }
-
-
-  function describeRule(rule) {
-    const anteItems = asArray(rule.antecedents);
-    const consItems = asArray(rule.consequents);
-    const anteText = describeAntecedents(anteItems);
-
-    if (consItems.length === 1 && consItems[0] === "rain_level_High") {
-      return `เมื่อ${anteText} มักพบว่าปริมาณฝนของเดือนเดียวกันสูงกว่าค่าปกติด้วย`;
-    }
-
-    const cons = consItems.map(consItemPhrase);
-    return `เมื่อ${anteText} มักพบ${joinThaiList(cons)}ร่วมด้วยในเดือนเดียวกัน`;
-  }
-
-  function isSearchRuleItem(item) {
-  return item && item.startsWith("Search_");
-}
-
-function getSearchWord(item) {
-  return ruleItemWord(item);
-}
-
-function isReverseRule(ruleA, ruleB) {
-  const aAnte = asArray(ruleA.antecedents);
-  const aCons = asArray(ruleA.consequents);
-
-  const bAnte = asArray(ruleB.antecedents);
-  const bCons = asArray(ruleB.consequents);
-
-  // ใช้เฉพาะกรณี 1 คำ -> 1 คำ
-  if (
-    aAnte.length !== 1 ||
-    aCons.length !== 1 ||
-    bAnte.length !== 1 ||
-    bCons.length !== 1
-  ) {
-    return false;
-  }
-
-  return (
-    aAnte[0] === bCons[0] &&
-    aCons[0] === bAnte[0]
-  );
-}
-
-function buildruleTexts(rules, maxCount = 3) {
-  const texts = [];
-  const used = new Set();
-
-  for (let i = 0; i < rules.length && texts.length < maxCount; i++) {
-    if (used.has(i)) continue;
-
-    const rule = rules[i];
-    const ante = asArray(rule.antecedents);
-    const cons = asArray(rule.consequents);
-
-    if (
-      ante.length === 1 &&
-      cons.length === 1 &&
-      isSearchRuleItem(ante[0]) &&
-      isSearchRuleItem(cons[0])
-    ) {
-      let reverseIndex = -1;
-
-      for (let j = i + 1; j < rules.length; j++) {
-        if (!used.has(j) && isReverseRule(rule, rules[j])) {
-          reverseIndex = j;
-          break;
-        }
-      }
-      const anteWord = getSearchWord(ante[0]);
-      const consWord = getSearchWord(cons[0]);
-
-      // A -> B และ B -> A
-      if (reverseIndex !== -1) {
-        texts.push(
-          `“${anteWord}” และ “${consWord}” มักเป็นคำค้นหาที่อยู่ในระดับสูงพร้อมกันในเดือนเดียวกัน`
-        );
-        used.add(i);
-        used.add(reverseIndex);
-        continue;
-      }
-      texts.push(
-        `เมื่อการค้นหา “${anteWord}” สูง มักพบว่า “${consWord}” มีการค้นหาสูงร่วมด้วย`
-      );
-
-      used.add(i);
-      continue;
-    }
-    texts.push(describeRule(rule));
-    used.add(i);
-  }
-
-  return texts;
-}
 
   function selectDiverseRules(rules, maxCount) {
     const seenConsequent = new Set();
@@ -1283,14 +1141,7 @@ function buildruleTexts(rules, maxCount = 3) {
   }
 
 
-
   const hasTargetSearchData = targetSearchDetail != null;
-
-  const targetSearchHighCount = SEARCH_FIELDS.filter(
-    (f) => currentLevels[f] === "High"
-  ).length;
-  const targetSearchHighTotal = SEARCH_FIELDS.length;
-
 
   const SEARCH_BEHAVIOR_CATEGORY = {
     search_flood: "flood",
@@ -1332,8 +1183,7 @@ function buildruleTexts(rules, maxCount = 3) {
     return phrases;
   }
 
-  // ใช้เฉพาะการ์ดในกล่องกราฟ (ประโยคเต็มแบบเดิม) — ย่อหน้าสรุปผลหลักประกอบ
-  // ประโยคของตัวเองจาก searchBehaviorPhraseList() โดยตรงแทน (ดูด้านล่าง)
+
   function describeSearchBehaviorSummary(highFields) {
     if (highFields.length === 0) return "";
     const phrases = searchBehaviorPhraseList(highFields);
@@ -1342,12 +1192,6 @@ function buildruleTexts(rules, maxCount = 3) {
 
   const targetHighFields = SEARCH_FIELDS.filter((f) => currentLevels[f] === "High");
   const searchBehaviorSummaryText = describeSearchBehaviorSummary(targetHighFields);
-
-
-  const graphBoxMatchedRules = [...(isForecastYear ? pendingRules : currentRules)].sort(
-    (a, b) => (b.confidence || 0) - (a.confidence || 0)
-  );
-
 
 
   const summaryCardClass = "bg-sky-50 border-sky-200";
@@ -1363,25 +1207,19 @@ function buildruleTexts(rules, maxCount = 3) {
       summaryDetail =
         `${selectedMonthText} มีรายงานการเกิดอุทกภัย
         โดย${historyRatioText} ` +
-        `และ${rainStatusText}${patternNarrative}`;
+        `และ${rainStatusText}`;
     } else {
 
       summaryDetail =
         `${selectedMonthText} ไม่พบรายงานการเกิดอุทกภัยในข้อมูลที่รวบรวมไว้ ` +
-        `โดย${historyRatioText} และ${rainStatusText}${patternNarrative}`;
+        `โดย${historyRatioText} และ${rainStatusText}`;
     }
   } else {
-
-    if (riskLevel?.key === "high") {
-    } else if (riskLevel?.key === "medium") {
-    } else if (riskLevel?.key === "low") {
-    } else {
-    }
 
   
   if (riskLevel) {
   const levelWord =
-    { low: "ต่ำ", medium: "ปานกลาง", high: "สูง" }[riskLevel.key] ||
+    { low: "สถานการณ์ปกติ", medium: "ปานกลาง", high: "สูง" }[riskLevel.key] ||
     riskLevel.label;
 
   const monthYearText =
@@ -1405,13 +1243,16 @@ function buildruleTexts(rules, maxCount = 3) {
 
     if (!prediction.hasElevatedSignal) {
 
-      summaryMethodologyText =
-        `${historySentence} จึงอยู่ในระดับเฝ้าระวัง${levelWord}`;
+    if (riskLevel.key === "low") {
+    summaryMethodologyText = `${historySentence} จึงถือว่าเป็นสถานการณ์ปกติ`;
+  } else {
+    summaryMethodologyText = `${historySentence} จึงอยู่ในระดับเฝ้าระวัง${levelWord}`;
+  }
     } else {
       const elevatedLabels = [];
       for (let i = 0; i < prediction.searchTerms.length; i++) {
         const term = prediction.searchTerms[i];
-        if (term.status === KEYWORD_ELEVATED) elevatedLabels.push(`“${term.label}”`);
+        if (term.status === KEYWORD_ABOVE_THRESHOLD) elevatedLabels.push(`“${term.label}”`);
       }
 
       let searchClause = "และพบสัญญาณการค้นหา";
@@ -1438,30 +1279,6 @@ function buildruleTexts(rules, maxCount = 3) {
       `สะท้อนระดับการเกิดอุทกภัยย้อนหลัง${levelWord} ` ;
   }
 
-
-  if (summaryMatchedRules.length > 0) {
-  
-    const topRule = selectDiverseRules(summaryMatchedRules, 1)[0];
-
-    const ruleTopics = [];
-    if (topRule) {
-      const ruleItems = asArray(topRule.antecedents).concat(asArray(topRule.consequents));
-      for (let i = 0; i < ruleItems.length; i++) {
-        const item = ruleItems[i];
-        const topic = item === "rain_level_High" ? "ปริมาณฝน" : `“${ruleItemWord(item)}”`;
-        if (ruleTopics.indexOf(topic) === -1) ruleTopics.push(topic);
-      }
-    }
-
-    let associationClause =
-      "นอกจากนี้ ข้อมูลของเดือนนี้ยังสอดคล้องกับรูปแบบความสัมพันธ์ย้อนหลังที่เคยพบ";
-    if (ruleTopics.length > 0) {
-      associationClause =
-        associationClause + `โดยเฉพาะรูปแบบที่เกี่ยวข้องกับการค้นหาคำว่า${joinThaiList(ruleTopics)}`;
-    }
-
-    summaryMethodologyText = `${summaryMethodologyText} ${associationClause}`;
-  }
 
 } else {
   summaryMethodologyText =
@@ -1715,10 +1532,21 @@ function buildruleTexts(rules, maxCount = 3) {
         <div className="p-5">
           {reportedAreas.hasAreaDetail ? (
             <div className="flex flex-col gap-3">
-              
+
+              <p className="m-0 text-xs text-slate-500">
+                พบ {reportedAreas.districts.length} อำเภอที่เคยมีรายงาน แตะที่หมุดเพื่อดูตำบลและหมู่
+              </p>
+
+              <div className="h-[380px] rounded-2xl overflow-hidden border border-slate-200">
+                <FloodAreaMapView
+                  districts={reportedAreas.districts}
+                  province={selectedProvince}
+                />
+              </div>
+
               <div className="flex flex-col gap-2">
                 <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest pl-2">
-                  อำเภอที่เคยเกิดเหตุการณ์อุกภัย ({reportedAreas.districts.length})
+                  ดูรายละเอียดรายอำเภอ
                 </label>
                 <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 transition-all focus-within:bg-white focus-within:border-sky-500 focus-within:ring-2 ring-sky-100">
                   <select
@@ -1753,6 +1581,15 @@ function buildruleTexts(rules, maxCount = 3) {
                   </p>
                 </div>
               )}
+
+              <p className="m-0 text-[11px] text-slate-400">
+                พิกัดตำบลจากชุดข้อมูล &ldquo;พิกัดตำบล อำเภอ จังหวัดของประเทศ&rdquo; โดยกรมการปกครอง
+                เผยแพร่ผ่าน{' '}
+                <a href="https://gistdaportal.gistda.or.th/portal/home/item.html?id=a9e042bb191a43a9994e469ada3fa66e" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">
+                  GISTDA
+                </a>
+                {' · '}DGA Open Government License
+              </p>
             </div>
           ) : (
             <div className="p-6 flex flex-col items-center justify-center gap-2 text-center">
@@ -1897,7 +1734,6 @@ function buildruleTexts(rules, maxCount = 3) {
                 />
 
 
-
                 <Line
                   yAxisId="chance"
                   type="monotone"
@@ -1945,7 +1781,7 @@ function buildruleTexts(rules, maxCount = 3) {
               <div className="flex flex-wrap items-center gap-5 justify-center">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-green-500 inline-block" />
-                  <span className="text-xs font-bold text-slate-500">เฝ้าระวังต่ำ</span>
+                  <span className="text-xs font-bold text-slate-500">สถานการณ์ปกติ</span>
 
                 </div>
                 <div className="flex items-center gap-2">
@@ -1975,7 +1811,7 @@ function buildruleTexts(rules, maxCount = 3) {
               </div>
               <div>
                 <h3 className="text-slate-800 font-bold tracking-tight leading-none text-base">
-                  พฤติกรรมการค้นหาจาก Google Trends เทียบกับสถานการณ์จริง
+                  ข้อมูลการค้นหาจาก Google Trends เทียบกับสถานการณ์จริง
                 </h3>
                 {/* <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-wider">
                   {selectedProvince} · {thaiMonthNames[selectedMonth]} {parseInt(selectedYear) + 543}
@@ -2006,70 +1842,26 @@ function buildruleTexts(rules, maxCount = 3) {
           <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-4">
             {!hasTargetSearchData ? (
               <p className="m-0 text-sm font-semibold text-slate-500">
-                ยังไม่มีข้อมูลพฤติกรรมการค้นหาสำหรับเดือนและปีที่เลือก
+                ยังไม่มีข้อมูลการค้นหาสำหรับเดือนและปีที่เลือก
               </p>
             ) : (
               <>
                 <div className="flex flex-col gap-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    พฤติกรรมการค้นหาในเดือน{thaiMonthNames[selectedMonth]} {parseInt(selectedYear) + 543}
+                    ข้อมูลการค้นหาในเดือน{thaiMonthNames[selectedMonth]} {parseInt(selectedYear) + 543}
                   </span>
-                  {targetSearchHighCount === 0 ? (
+                  {targetHighFields.length === 0 ? (
                     <p className="m-0 text-sm font-semibold leading-relaxed text-slate-600">
                       ไม่พบคำค้นหาใดสูงกว่าระดับปกติของจังหวัดในเดือนนี้
                     </p>
                   ) : (
-                    <>
-                      {/* <p className="m-0 text-sm font-bold text-slate-800">
-                        พบคำค้นหาที่อยู่ในระดับสูง {targetSearchHighCount} จาก {targetSearchHighTotal} คำ
-                      </p>
-                      <p className="m-0 text-[13px] font-semibold text-slate-500">
-                        {targetHighFields.map((f) => SEARCH_LABELS[f]).join(" · ")}
-                      </p> */}
-                      <p className="m-0 text-sm font-semibold leading-relaxed text-slate-700">
-                        {searchBehaviorSummaryText}
-                      </p>
-                    </>
+                    <p className="m-0 text-sm font-semibold leading-relaxed text-slate-700">
+                      {searchBehaviorSummaryText}
+                    </p>
                   )}
                 </div>
 
-                  {(() => {
-                    const ruleTexts = buildruleTexts(graphBoxMatchedRules, 3);
-
-                    return (
-                      ruleTexts.length > 0 && (
-                        <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
-                            <details className="group flex flex-col gap-2 pt-3 border-t border-slate-100">
-                            <summary className="cursor-pointer list-none flex items-center justify-between">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                            พบรูปแบบย้อนหลังที่ตรงกับข้อมูลเดือนนี้ {graphBoxMatchedRules.length} รูปแบบ
-                            · แสดงตัวอย่าง {ruleTexts.length} รูปแบบ
-                          </span>
-
-                              <span className="text-xs font-bold text-sky-600 group-open:hidden">
-                                ดูรายละเอียด
-                              </span>
-
-                              <span className="text-xs font-bold text-sky-600 hidden group-open:inline">
-                                ซ่อนรายละเอียด
-                              </span>
-                            </summary>
-
-                            <div className="flex flex-col gap-1.5 mt-3">
-                              {ruleTexts.map((text, index) => (
-                                <p
-                                  key={index}
-                                  className="m-0 text-sm font-semibold leading-relaxed text-slate-700"
-                                >
-                                  {text}
-                                </p>
-                              ))}
-                            </div>
-                          </details>
-                        </div>
-                      )
-                    );
-                  })()}
+                
               </>
             )}
           </div>

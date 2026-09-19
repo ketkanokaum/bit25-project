@@ -2,23 +2,35 @@ import Navbar from '@/components/Navbar';
 import LiveClock from '@/components/LiveClock';
 import ForecastDisplay from '@/components/ForecastDisplay';
 import { getAllForecastData } from '@/lib/data/forecast';
+import { getTodayRainfallByProvince } from '@/lib/data/live-rainfall';
 
 export default async function ForecastPage() {
-  const { forecastRows, actualRows } = await getAllForecastData();
+  const { forecastRows, actualRows, normalRows } = await getAllForecastData();
 
-  const availableProvinces = [];
-  for (let i = 0; i < forecastRows.length; i++) {
-    const province = forecastRows[i].province;
-    if (!availableProvinces.includes(province)) {
-      availableProvinces.push(province);
-    }
+  // ข้อมูลฝนวันนี้มาจาก API ภายนอก ถ้าเรียกไม่ได้ให้หน้ายังแสดงส่วนอื่นได้ตามปกติ
+  let todayRainfall = {};
+  try {
+    todayRainfall = await getTodayRainfallByProvince();
+  } catch (error) {
+    todayRainfall = {};
   }
 
+  // กำหนดจังหวัดเริ่มต้น
   let initialProvince = null;
-  if (availableProvinces.includes('ขอนแก่น')) {
-    initialProvince = 'ขอนแก่น';
-  } else if (availableProvinces.length > 0) {
-    initialProvince = availableProvinces[0];
+
+  for (let i = 0; i < forecastRows.length; i++) {
+    const province = forecastRows[i].province;
+
+    // ถ้ามีขอนแก่น ให้ใช้ขอนแก่น
+    if (province === 'ขอนแก่น') {
+      initialProvince = 'ขอนแก่น';
+      break;
+    }
+
+    // ถ้ายังไม่มีจังหวัดเริ่มต้น ให้เก็บจังหวัดแรกไว้ก่อน
+    if (initialProvince === null) {
+      initialProvince = province;
+    }
   }
 
   return (
@@ -31,9 +43,11 @@ export default async function ForecastPage() {
           <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight leading-tight">
             ปริมาณน้ำฝนล่วงหน้า
           </h1>
+
           <p className="text-slate-500 text-[15px]">
             รายจังหวัดในประเทศไทย
           </p>
+
           <LiveClock />
         </div>
 
@@ -41,6 +55,8 @@ export default async function ForecastPage() {
           initialProvince={initialProvince}
           forecastRows={forecastRows}
           actualRows={actualRows}
+          normalRows={normalRows}
+          todayRainfall={todayRainfall}
         />
 
       </div>
