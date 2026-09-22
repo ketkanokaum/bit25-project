@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   ComposedChart, Line, Area, XAxis, YAxis, Tooltip,
   CartesianGrid, ResponsiveContainer, Legend,
-  BarChart, Bar,
 } from 'recharts';
 
 import { percentOfNormal, classifyRainLevel } from '@/lib/rainlevel';
@@ -13,7 +12,6 @@ import CompareRainfallDisplay from '@/components/CompareRainfallDisplay';
 import {
   THAI_MONTHS_SHORT,
   formatMm,
-  buildNormalChartData,
   buildSummarySentence,
   buildCompareChartData,
 } from '@/lib/forecast-display';
@@ -158,11 +156,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     return result;
   }, [normalRows, selectedProvince]);
 
-  let normalChartData = [];
-  if (highlightForecast) {
-    normalChartData = buildNormalChartData(monthlyNormals, highlightForecast.month);
-  }
-
   let highlightRangeText = null;
   if (
     highlightForecast &&
@@ -179,7 +172,8 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       highlightMonthName,
       highlightForecast,
       highlightDiffMm,
-      highlightRangeText
+      highlightRangeText,
+      highlightTier
     );
   }
 
@@ -194,7 +188,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
   if (currentRain && selectedStation !== 'all' && currentRain.stations) {
     for (let i = 0; i < currentRain.stations.length; i++) {
       const station = currentRain.stations[i];
-      if (station.name === selectedStation) {
+      if (station.id === selectedStation) {
         selectedStationData = station;
         break;
       }
@@ -218,8 +212,8 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     for (let i = 0; i < currentRain.stations.length; i++) {
       const station = currentRain.stations[i];
       stationOptions.push(
-        <option key={station.name} value={station.name}>
-          {station.name}
+        <option key={station.id} value={station.id}>
+          {station.name} ({formatMm(station.rainfall)} มม.)
         </option>
       );
     }
@@ -639,16 +633,16 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
             )}
           </div>
 
-          {highlightForecast && normalChartData.length > 0 && (
+          {/* {highlightForecast && normalChartData.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <h3 className="text-slate-800 font-bold text-sm">
                     ปริมาณฝนตามปกติของ{data.province} ตลอดปี
                   </h3>
-                  {/* <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     {normalHeadline}
-                  </p> */}
+                  </p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -696,7 +690,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                 )}
               </p>
             </div>
-          )}
+          )} */}
 
         </>
       )}

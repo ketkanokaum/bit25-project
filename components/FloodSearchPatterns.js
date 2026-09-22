@@ -1280,6 +1280,33 @@ let historyRatioText;
   }
 
 
+  if (sortedRules.length > 0) {
+
+    const topRule = selectDiverseRules(sortedRules, 1)[0];
+
+    const ruleTopics = [];
+    if (topRule) {
+      const ruleItems = asArray(topRule.antecedents).concat(asArray(topRule.consequents));
+      for (let i = 0; i < ruleItems.length; i++) {
+        const item = ruleItems[i];
+        const topic = item === "rain_level_High" ? "ปริมาณฝน" : `“${ruleItemWord(item)}”`;
+        if (ruleTopics.indexOf(topic) === -1) ruleTopics.push(topic);
+      }
+    }
+
+    let associationClause =
+      "ซึ่งสอดคล้องกับข้อมูลใน Google Trends และเหตุการณ์ที่เกิดขึ้นจริง";
+    if (ruleTopics.length > 0) {
+      associationClause = associationClause + ` คือ${joinThaiList(ruleTopics)}`;
+    }
+    if (topRule && topRule.confidence != null) {
+      const rulePercent = Math.round(Number(topRule.confidence) * 100);
+      associationClause = associationClause + ` ที่มีโอกาสเกิดขึ้น ${rulePercent}%`;
+    }
+
+    summaryMethodologyText = `${summaryMethodologyText} ${associationClause}`;
+  }
+
 } else {
   summaryMethodologyText =
     "";
