@@ -213,7 +213,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       const station = currentRain.stations[i];
       stationOptions.push(
         <option key={station.id} value={station.id}>
-          {station.name} ({formatMm(station.rainfall)} มม.)
+          {station.name}
         </option>
       );
     }
@@ -588,11 +588,11 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
 
                 {currentRain.stations && currentRain.stations.length > 0 && (
                   <div className="mt-4">
-                    <label className="text-xs text-slate-500">เลือกสถานีตรวจวัด</label>
+                    {/* <label className="text-xs text-slate-500">เลือกสถานีตรวจวัด</label> */}
                     <select
                       value={selectedStation}
                       onChange={(e) => setSelectedStation(e.target.value)}
-                      className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 outline-none"
+                      className="mt-1 w-full sm:w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 outline-none"
                     >
                       <option value="all">ค่าเฉลี่ยทุกสถานี</option>
                       {stationOptions}
