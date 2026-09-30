@@ -6,6 +6,10 @@ import { getFloodData, getFloodEventDetails } from '@/lib/data/flood';
 import { getAssociationRules } from '@/lib/data/rules';
 import { getSearchTrends } from '@/lib/data/trends';
 
+// หน้านี้ข้อมูลรวมกันใหญ่เกินขีดจำกัดของ ISR cache บน Vercel (19.07MB)
+// จึงสั่งให้ render ต่อ request แทนที่จะ pre-render เป็นหน้า static
+export const dynamic = 'force-dynamic';
+
 
 // สร้าง key จาก จังหวัด + ปี + เดือน
 function makeKey(item) {
