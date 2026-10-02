@@ -47,7 +47,7 @@ export default async function PatternPage() {
         <FloodSearchPatterns
           initialData={combinedData}
           initialRules={rulesData}
-          initialFloodEvents={floodEventDetails}
+        
         />
 
       </div>
