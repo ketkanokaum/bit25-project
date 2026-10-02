@@ -1,81 +1,19 @@
+
+
 import Navbar from '@/components/Navbar';
 import FloodSearchPatterns from '@/components/FloodSearchPatterns';
 
-import { getRainfallData } from '@/lib/data/rainfall';
-import { getFloodData, getFloodEventDetails } from '@/lib/data/flood';
+import { getCombinedPatternData } from '@/lib/data/pattern';
 import { getAssociationRules } from '@/lib/data/rules';
-import { getSearchTrends } from '@/lib/data/trends';
 
-// หน้านี้ข้อมูลรวมกันใหญ่เกินขีดจำกัดของ ISR cache บน Vercel (19.07MB)
-// จึงสั่งให้ render ต่อ request แทนที่จะ pre-render เป็นหน้า static
 export const dynamic = 'force-dynamic';
 
-
-// สร้าง key จาก จังหวัด + ปี + เดือน
-function makeKey(item) {
-  return `${item.province}_${item.year}_${item.month}`;
-}
-
-
-// เปลี่ยน array ให้ค้นหาข้อมูลด้วย key ได้ง่าย
-function createLookup(list) {
-  const lookup = {};
-
-  for (let i = 0; i < list.length; i++) {
-    const item = list[i];
-    const key = makeKey(item);
-
-    lookup[key] = item;
-  }
-
-  return lookup;
-}
-
-
 export default async function PatternPage() {
-
-  // ดึงข้อมูลทั้งหมดพร้อมกัน
-  const [rainfallList,floodList,rulesData,trendsList,floodEventDetails,
-  ] = await Promise.all([
-    getRainfallData(),getFloodData(),getAssociationRules(),
-    getSearchTrends(),getFloodEventDetails(),
+  // ดึงข้อมูล 2 ก้อนหลักที่ประมวลผลเสร็จแล้วจาก TiDB
+  const [combinedData, rulesData] = await Promise.all([
+    getCombinedPatternData(),
+    getAssociationRules(),
   ]);
-
-
-  // เตรียมข้อมูลสำหรับค้นหาด้วย จังหวัด + ปี + เดือน
-  const floodByKey = createLookup(floodList);
-  const trendByKey = createLookup(trendsList);
-
-
-  // รวม Rainfall + Flood + Google Trends
-  const combinedData = [];
-
-  for (let i = 0; i < rainfallList.length; i++) {
-    const rain = rainfallList[i];
-    const key = makeKey(rain);
-
-    const flood = floodByKey[key] || {};
-    const trend = trendByKey[key] || {};
-
-    combinedData.push({
-      ...rain,
-
-      // ข้อมูลอุทกภัย
-      affected_people: flood.total_affected ?? null,
-      fatalities: flood.total_fatalities ?? null,
-      evacuees: flood.total_evacuees ?? null,
-      date: flood.flood_date ?? null,
-
-      // Google Trends
-      search_flood: trend.search_flood ?? null,
-      search_rain: trend.search_rain ?? null,
-      search_storm: trend.search_storm ?? null,
-      search_water_level: trend.search_water_level ?? null,
-      search_water_situation: trend.search_water_situation ?? null,
-      search_evacuate: trend.search_evacuate ?? null,
-    });
-  }
-
 
   return (
     <div className="min-h-screen">
