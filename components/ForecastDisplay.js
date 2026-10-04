@@ -9,7 +9,6 @@ import {
 import { FLOOD_RISK_LEVELS, classifyFloodRisk } from '@/lib/rainlevel';
 import { provinceRegions, regionOrder } from '@/lib/constants/provinces';
 import CompareRainfallDisplay from '@/components/CompareRainfallDisplay';
-import {THAI_MONTHS_SHORT,formatMm,buildSummarySentence,buildCompareChartData,} from '@/lib/forecast-display';
 
 const THAI_MONTHS = [
   'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -18,10 +17,108 @@ const THAI_MONTHS = [
 
 const COMPARE_COLORS = ['#2563eb', '#f97316', '#0ea5e9', '#22c55e', '#eab308', '#ec4899'];
 
+const THAI_MONTHS_SHORT = [
+  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+];
+
+function formatMm(value) {
+  if (value == null) return null;
+  return Number(value).toFixed(1);
+}
+
+function buildSummarySentence(province, monthName, forecastRow, rangeText, rainLevel) {
+  if (!forecastRow) return null;
+
+  let sentence = `เดือน${monthName} จังหวัด${province}`;
+
+  if (rainLevel && rainLevel.tier != null) {
+    sentence += ` ${rainLevel.label}`;
+  }
+
+  sentence += ` คาดว่าจะมีปริมาณฝนประมาณ ${formatMm(forecastRow.predicted_rain)} มม.`;
+
+  if (rangeText) {
+    sentence += ` ค่าแนวโน้มปริมาณน้ำฝนอยู่ในช่วงประมาณ ${rangeText}`;
+  }
+
+  return sentence;
+}
+
+function buildCompareChartData(provinceList, forecastRows, actualRows, year) {
+  let lastMonth = 0;
+  for (let i = 0; i < forecastRows.length; i++) {
+    const row = forecastRows[i];
+    if (provinceList.includes(row.province) && row.month > lastMonth) {
+      lastMonth = row.month;
+    }
+  }
+  for (let i = 0; i < actualRows.length; i++) {
+    const row = actualRows[i];
+    if (provinceList.includes(row.province) && row.year === year && row.month > lastMonth) {
+      lastMonth = row.month;
+    }
+  }
+  if (lastMonth === 0) return [];
+
+  const lastActualByProvince = {};
+  for (let p = 0; p < provinceList.length; p++) {
+    const province = provinceList[p];
+    let last = 0;
+    for (let i = 0; i < actualRows.length; i++) {
+      const row = actualRows[i];
+      if (row.province === province && row.year === year && row.month > last) {
+        last = row.month;
+      }
+    }
+    lastActualByProvince[province] = last;
+  }
+
+  const result = [];
+  for (let month = 1; month <= lastMonth; month++) {
+    const point = { month: month, label: THAI_MONTHS_SHORT[month - 1] };
+
+    for (let p = 0; p < provinceList.length; p++) {
+      const province = provinceList[p];
+
+      let actualValue = null;
+      for (let i = 0; i < actualRows.length; i++) {
+        const row = actualRows[i];
+        if (row.province === province && row.year === year && row.month === month) {
+          actualValue = Number(row.average_rain);
+          break;
+        }
+      }
+
+      let predicted = null;
+      for (let i = 0; i < forecastRows.length; i++) {
+        const row = forecastRows[i];
+        if (row.province === province && row.month === month) {
+          predicted = Number(row.predicted_rain);
+          break;
+        }
+      }
+
+      let forecastValue = null;
+      if (month === lastActualByProvince[province] && actualValue != null) {
+        forecastValue = actualValue;
+      } else if (predicted != null && month > lastActualByProvince[province]) {
+        forecastValue = predicted;
+      }
+
+      point[province + '_actual'] = actualValue;
+      point[province + '_forecast'] = forecastValue;
+    }
+
+    result.push(point);
+  }
+  return result;
+}
+
 function tooltipFormatter(value, name) {
-  if (name === 'ค่าอาจคลาดเคลื่อนอยู่ในช่วงนี้') {
+  if (name === 'ช่วงคาดการณ์') {
     if (!Array.isArray(value)) return ['-', name];
-    return [`${value[0].toFixed(1)}–${value[1].toFixed(1)} มม.`, name];
+    return [`${value[0].toFixed(1)} – ${value[1].toFixed(1)} มม.`, name];
   }
   if (value == null) return ['-', name];
   return [`${value} มม.`, name];
@@ -127,9 +224,10 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
   const highlightTier = classifyFloodRisk(highlightForecast ? highlightForecast.predicted_rain : null);
   const highlightStyle = highlightTier.tw;
 
-  const highlightMonthName = highlightForecast
-    ? THAI_MONTHS[highlightForecast.month - 1]
-    : null;
+  let highlightMonthName = null;
+  if (highlightForecast) {
+    highlightMonthName = THAI_MONTHS[highlightForecast.month - 1];
+  }
 
   let highlightRangeText = null;
   if (
@@ -324,6 +422,38 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     );
   }
 
+  let chartTitleText = "";
+  if (data) {
+    if (isComparing) {
+      chartTitleText = `เปรียบเทียบแนวโน้มปริมาณน้ำฝนระหว่างจังหวัด — ปี ${data.year + 543}`;
+    } else {
+      chartTitleText = `แนวโน้มปริมาณน้ำฝน ${data.province} — ปี ${data.year + 543}`;
+    }
+  }
+
+  const floodRiskRangeItems = [];
+  const floodRiskLabelItems = [];
+  for (let i = 0; i < FLOOD_RISK_LEVELS.length; i++) {
+    const level = FLOOD_RISK_LEVELS[i];
+    floodRiskRangeItems.push(
+      <div
+        key={level.key}
+        className="flex-1 text-center py-1.5 text-[11px] font-bold text-white"
+        style={{ backgroundColor: level.hex.dot }}
+      >
+        {level.range}
+      </div>
+    );
+    floodRiskLabelItems.push(
+      <div
+        key={level.key}
+        className="flex-1 text-center py-1.5 text-[11px] font-bold text-slate-600 bg-white"
+      >
+        {level.shortLabel}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
 
@@ -461,9 +591,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h3 className="text-slate-800 font-bold text-sm">
-              {isComparing
-                ? `เปรียบเทียบแนวโน้มปริมาณน้ำฝนระหว่างจังหวัด — ปี ${data.year + 543}`
-                : `แนวโน้มปริมาณน้ำฝน ${data.province} — ปี ${data.year + 543}`}
+              {chartTitleText}
             </h3>
             {isComparing && (
               <p className="text-xs text-slate-400 mt-0.5 mb-2">
@@ -528,25 +656,10 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
             {!isComparing && (
               <div className="mt-4 rounded-xl overflow-hidden border border-slate-200">
                 <div className="flex">
-                  {FLOOD_RISK_LEVELS.map((lvl) => (
-                    <div
-                      key={lvl.key}
-                      className="flex-1 text-center py-1.5 text-[11px] font-bold text-white"
-                      style={{ backgroundColor: lvl.hex.dot }}
-                    >
-                      {lvl.range}
-                    </div>
-                  ))}
+                  {floodRiskRangeItems}
                 </div>
                 <div className="flex border-t border-slate-200">
-                  {FLOOD_RISK_LEVELS.map((lvl) => (
-                    <div
-                      key={lvl.key}
-                      className="flex-1 text-center py-1.5 text-[11px] font-bold text-slate-600 bg-white"
-                    >
-                      {lvl.shortLabel}
-                    </div>
-                  ))}
+                  {floodRiskLabelItems}
                 </div>
               </div>
             )}

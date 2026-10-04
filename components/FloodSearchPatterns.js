@@ -15,8 +15,259 @@ import PlaceIcon from "@mui/icons-material/Place";
 import { provinceRegions, regionOrder } from "@/lib/constants/provinces";
 import { groupReportedAreas } from "@/lib/flood-areas";
 import { classifyFloodRisk, isHighFloodRisk } from "@/lib/rainlevel";
-import { getAllYears, predictFlood, getFloodEvents, didFloodHappen, getMonthRow, REAL_DATA_YEARS, LAST_REAL_YEAR, SEARCH_FIELDS, SEARCH_LABELS, 
-getMonitoringLevelInfo, ASSESSMENT_HISTORICAL_ONLY, METHOD_MODEL } from "@/lib/prediction";
+const REAL_DATA_YEARS = [2020, 2021, 2022, 2023, 2024];
+const LAST_REAL_YEAR = REAL_DATA_YEARS[REAL_DATA_YEARS.length - 1];
+
+const METHOD_MODEL = "model";
+
+const ASSESSMENT_HISTORICAL_ONLY = "historical_only";
+
+const SEARCH_FIELDS = [
+  "search_flood", "search_rain", "search_storm",
+  "search_water_level", "search_water_situation", "search_evacuate",
+];
+
+const SEARCH_LABELS = {
+  search_flood: "น้ำท่วม", search_rain: "ฝนตก", search_storm: "พายุ",
+  search_water_level: "ระดับน้ำ", search_water_situation: "สถานการณ์น้ำ",
+  search_evacuate: "อพยพ",
+};
+
+const SEARCH_HIGH_QUANTILE = 2 / 3;
+
+function yearMonthKey(year, month) {
+  return parseInt(year) * 12 + (parseInt(month) - 1);
+}
+function hasAllSearchData(row) {
+  for (let i = 0; i < SEARCH_FIELDS.length; i++) {
+    if (row[SEARCH_FIELDS[i]] == null) return false;
+  }
+  return true;
+}
+function getFieldValues(rows, field) {
+  const values = [];
+  for (let i = 0; i < rows.length; i++) values.push(Number(rows[i][field]));
+  return values;
+}
+function quantile(sortedValues, q) {
+  const n = sortedValues.length;
+  if (n === 0) return null;
+  if (n === 1) return sortedValues[0];
+  const position = (n - 1) * q;
+  const low = Math.floor(position);
+  const high = Math.ceil(position);
+  if (low === high) return sortedValues[low];
+  const lowValue = sortedValues[low];
+  const highValue = sortedValues[high];
+  return lowValue + (highValue - lowValue) * (position - low);
+}
+
+function getAllYears(lastSelectableYear) {
+  const years = [];
+  for (let year = REAL_DATA_YEARS[0]; year <= lastSelectableYear; year++) years.push(year);
+  return years;
+}
+
+function getFloodEvents(data, province, year, month) {
+  const events = [];
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (row.province === province && parseInt(row.year) === parseInt(year) &&
+        parseInt(row.month) === parseInt(month) && row.date) events.push(row);
+  }
+  return events;
+}
+
+function didFloodHappen(data, province, year, month) {
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (row.province === province && parseInt(row.year) === parseInt(year) &&
+        parseInt(row.month) === parseInt(month) && row.date) return true;
+  }
+  return false;
+}
+
+function countFloodYears(data, province, month) {
+  const years = [];
+  for (let i = 0; i < REAL_DATA_YEARS.length; i++) {
+    const year = REAL_DATA_YEARS[i];
+    if (didFloodHappen(data, province, year, month)) years.push(year);
+  }
+  return {
+    years: years, count: years.length,
+    total: REAL_DATA_YEARS.length,
+    rate: years.length / REAL_DATA_YEARS.length,
+  };
+}
+
+function getMonthRow(data, province, year, month) {
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (row.province === province && parseInt(row.year) === parseInt(year) &&
+        parseInt(row.month) === parseInt(month)) return row;
+  }
+  return null;
+}
+
+const KEYWORD_NO_SEARCH = "NoSearch";
+const KEYWORD_WITHIN_THRESHOLD = "WithinThreshold";
+const KEYWORD_ABOVE_THRESHOLD = "AboveThreshold";
+const KEYWORD_NO_THRESHOLD = "NoThreshold";
+
+function collectReferenceSearchMonths(data, province) {
+  const months = new Map();
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    if (row.province !== province) continue;
+    if (!REAL_DATA_YEARS.includes(parseInt(row.year))) continue;
+    if (!hasAllSearchData(row)) continue;
+    const key = yearMonthKey(row.year, row.month);
+    if (!months.has(key)) months.set(key, row);
+  }
+  return Array.from(months.values());
+}
+
+function getPositiveP67(values) {
+  const positiveValues = [];
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] > 0) positiveValues.push(values[i]);
+  }
+  if (positiveValues.length === 0) return null;
+  positiveValues.sort(function (a, b) { return a - b; });
+  return quantile(positiveValues, SEARCH_HIGH_QUANTILE);
+}
+
+function getSearchActivityDetail(data, province, year, month) {
+  const currentRow = getMonthRow(data, province, year, month);
+  if (!currentRow)
+    return null;
+
+  if (!hasAllSearchData(currentRow))
+    return null;
+
+  const referenceMonths = collectReferenceSearchMonths(data, province);
+  if (referenceMonths.length === 0)
+    return null;
+
+  const terms = [];
+  let elevatedCount = 0;
+  let noRefCount = 0;
+
+  for (let i = 0; i < SEARCH_FIELDS.length; i++) {
+    const field = SEARCH_FIELDS[i];
+    const values = getFieldValues(referenceMonths, field);
+    const threshold = getPositiveP67(values);
+    const value = Number(currentRow[field]);
+
+    let status = KEYWORD_WITHIN_THRESHOLD;
+    if (value === 0) {
+      status = KEYWORD_NO_SEARCH;
+    } else if (threshold === null) {
+      status = KEYWORD_NO_THRESHOLD;
+      noRefCount++;
+    } else if (value > threshold) {
+      status = KEYWORD_ABOVE_THRESHOLD;
+      elevatedCount++;
+    }
+    terms.push({ field: field, label: SEARCH_LABELS[field], value: value, threshold: threshold, status: status });
+  }
+  return { terms: terms, elevatedCount: elevatedCount, noRefCount: noRefCount, hasElevatedSignal: elevatedCount > 0 };
+}
+
+function getHistoricalLevel(floodCount) {
+  if (floodCount == null) return null;
+  if (floodCount <= 1) return "low";
+  if (floodCount <= 3) return "medium";
+  return "high";
+}
+
+function getMonitoringLevel(floodCount, hasElevatedSignal) {
+  if (floodCount == null) return null;
+  if (floodCount === 0) return "low";
+  if (floodCount === 1) {
+    if (hasElevatedSignal) return "medium";
+    return "low";
+  }
+  if (floodCount === 2 || floodCount === 3) {
+    if (hasElevatedSignal) return "high";
+    return "medium";
+  }
+  return "high";
+}
+
+function isMonitoringRequired(level) {
+  return level === "medium" || level === "high";
+}
+
+const RISK_LEVELS = [
+  { tier: 1, key: "low", label: "สถานการณ์ปกติ", chanceLabel: "น้อย", range: "< 33.33%", observedRate: 7.4,
+    advice: { title: "ติดตามสถานการณ์ตามปกติ", bullets: ["ตรวจสอบพยากรณ์อากาศเป็นระยะ","ติดตามข่าวสารจากหน่วยงานในพื้นที่","ยังไม่จำเป็นต้องเตรียมการเป็นพิเศษ"] },
+    hex: { color: "#15803d", bg: "#f0fdf4", border: "#86efac", dot: "#22c55e" },
+    tw: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", badge: "bg-green-100 text-green-700" } },
+  { tier: 2, key: "medium", label: "เฝ้าระวังปานกลาง", chanceLabel: "ปานกลาง", range: "33.33% – < 66.67%", observedRate: 26.2,
+    advice: { title: "เริ่มเตรียมความพร้อม", bullets: ["ติดตามสภาพอากาศและระดับน้ำอย่างสม่ำเสมอ","เตรียมยา เอกสารสำคัญ และของจำเป็น","ตรวจสอบทางระบายน้ำรอบบ้าน","วางแผนเคลื่อนย้ายทรัพย์สินหากระดับน้ำเพิ่มขึ้น"] },
+    hex: { color: "#b45309", bg: "#fffbeb", border: "#fde68a", dot: "#f59e0b" },
+    tw: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", badge: "bg-amber-100 text-amber-700" } },
+  { tier: 3, key: "high", label: "เฝ้าระวังสูง", chanceLabel: "มาก", range: "≥ 66.67%", observedRate: 67.5,
+    advice: { title: "เตรียมพร้อมรับสถานการณ์", bullets: ["ติดตามประกาศเตือนภัยอย่างใกล้ชิด","เตรียมกระเป๋าฉุกเฉินและยาประจำตัว","ย้ายสิ่งของสำคัญขึ้นที่สูง","ตรวจสอบเส้นทางและจุดอพยพ","ปฏิบัติตามประกาศของหน่วยงานในพื้นที่ทันที"] },
+    hex: { color: "#b91c1c", bg: "#fef2f2", border: "#fca5a5", dot: "#ef4444" },
+    tw: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", badge: "bg-red-100 text-red-700" } },
+];
+
+function getMonitoringLevelInfo(key) {
+  if (key == null) return null;
+  for (let i = 0; i < RISK_LEVELS.length; i++) {
+    if (RISK_LEVELS[i].key === key) return RISK_LEVELS[i];
+  }
+  return null;
+}
+
+function predictFlood(data, province, year, month) {
+  const selectedYear = parseInt(year);
+  const selectedMonth = parseInt(month);
+  const history = countFloodYears(data, province, selectedMonth);
+
+  if (REAL_DATA_YEARS.includes(selectedYear)) {
+    const events = getFloodEvents(data, province, selectedYear, selectedMonth);
+    const occurred = events.length > 0;
+    let score = 0;
+    if (occurred) score = 1;
+    return {
+      method: "confirmed", label: "สถิติที่เกิดขึ้นจริง",
+      score: score, occurred: occurred,
+      requiresMonitoring: occurred, history: history, note: "",
+    };
+  }
+
+  const activity = getSearchActivityDetail(data, province, selectedYear, selectedMonth);
+
+  if (activity === null) {
+    const historicalLevel = getHistoricalLevel(history.count);
+    return {
+      method: "climatology", label: "ระดับจากประวัติย้อนหลัง",
+      assessmentType: ASSESSMENT_HISTORICAL_ONLY,
+      historicalLevel: historicalLevel, monitoringLevel: null,
+      score: null, occurred: null,
+      requiresMonitoring: isMonitoringRequired(historicalLevel),
+      history: history, searchDataAvailable: false, searchTerms: null,
+      elevatedCount: null, noRefCount: null, hasElevatedSignal: null,
+      searchHighTotal: SEARCH_FIELDS.length,
+    };
+  }
+
+  const monitoringLevel = getMonitoringLevel(history.count, activity.hasElevatedSignal);
+  return {
+    method: METHOD_MODEL, label: "ระดับการเฝ้าระวังสำหรับเดือน",
+    assessmentType: "historical_plus_search",
+    historicalLevel: null, monitoringLevel: monitoringLevel,
+    score: null, occurred: null,
+    requiresMonitoring: isMonitoringRequired(monitoringLevel),
+    history: history, searchDataAvailable: true,
+    searchTerms: activity.terms, elevatedCount: activity.elevatedCount,
+    noRefCount: activity.noRefCount, hasElevatedSignal: activity.hasElevatedSignal,
+    searchHighTotal: SEARCH_FIELDS.length, note: "",
+  };
+}
 
 const FloodAreaMapView = dynamic(() => import("@/components/FloodAreaMapView"), {
   ssr: false,
@@ -73,6 +324,20 @@ function translateWordList(words) {
     result.push(translateWord(words[i]));
   }
   return result;
+}
+
+// ใช้สร้างป้ายคำ (tag) หลายอัน เช่น คำค้นหาที่พบ หรือรูปแบบที่ตรงกับข้อมูลจริง
+// colorClasses คือ class สี Tailwind เช่น "bg-orange-50 text-orange-700 border-orange-100"
+function buildWordTagList(words, colorClasses) {
+  const tags = [];
+  for (let i = 0; i < words.length; i++) {
+    tags.push(
+      <span key={i} className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${colorClasses}`}>
+        {words[i]}
+      </span>
+    );
+  }
+  return tags;
 }
 
 
@@ -462,7 +727,13 @@ export default function FloodSearchPatterns({
     setSelectedDistrict("");
   }, [selectedProvince, selectedMonth, selectedYear, isForecastYear]);
 
-  const selectedDistrictData = reportedAreas.districts.find((d) => d.name === selectedDistrict) || null;
+  let selectedDistrictData = null;
+  for (let i = 0; i < reportedAreas.districts.length; i++) {
+    if (reportedAreas.districts[i].name === selectedDistrict) {
+      selectedDistrictData = reportedAreas.districts[i];
+      break;
+    }
+  }
 
   const monthOptions = [];
   for (const key in thaiMonthNames) {
@@ -670,14 +941,7 @@ if (isForecastYear) {
       for (let i = 0; i < visibleRules.length; i++) {
         const rule = visibleRules[i];
         const antecedentLabels = translateWordList(asArray(rule.antecedents));
-        const antecedentTags = [];
-        for (let j = 0; j < antecedentLabels.length; j++) {
-          antecedentTags.push(
-            <span key={j} className="px-3 py-1.5 bg-orange-50 text-orange-700 rounded-xl text-xs font-bold border border-orange-100">
-              {antecedentLabels[j]}
-            </span>
-          );
-        }
+        const antecedentTags = buildWordTagList(antecedentLabels, "bg-orange-50 text-orange-700 border-orange-100");
         cards.push(
           <div key={i} className="flex flex-col gap-3 p-5">
             <div className="flex flex-col gap-2">
@@ -723,22 +987,8 @@ if (isForecastYear) {
         const rule = visibleRules[i];
         const antecedentLabels = translateWordList(asArray(rule.antecedents));
         const consequentLabels = translateWordList(asArray(rule.consequents));
-        const antecedentTags = [];
-        for (let j = 0; j < antecedentLabels.length; j++) {
-          antecedentTags.push(
-            <span key={j} className="px-3 py-1.5 bg-orange-50 text-orange-700 rounded-xl text-xs font-bold border border-orange-100">
-              {antecedentLabels[j]}
-            </span>
-          );
-        }
-        const consequentTags = [];
-        for (let j = 0; j < consequentLabels.length; j++) {
-          consequentTags.push(
-            <span key={j} className="px-3 py-1.5 bg-sky-50 text-sky-700 rounded-xl text-xs font-bold border border-sky-100">
-              {consequentLabels[j]}
-            </span>
-          );
-        }
+        const antecedentTags = buildWordTagList(antecedentLabels, "bg-orange-50 text-orange-700 border-orange-100");
+        const consequentTags = buildWordTagList(consequentLabels, "bg-sky-50 text-sky-700 border-sky-100");
         cards.push(
           <div key={i} className="flex flex-col gap-3 p-5">
             <div className="flex flex-col gap-2">
@@ -839,7 +1089,6 @@ let historyRatioText;
   }
 
   function ruleItemWord(item) {
-    if (item === "rain_level_High") return "ปริมาณฝนสูงกว่าปกติ";
     return SEARCH_LABELS[item] ? SEARCH_LABELS[item] : item;
   }
 
@@ -913,7 +1162,12 @@ let historyRatioText;
     return `เดือนนี้มีการค้นหาเกี่ยวกับ${joinThaiList(phrases)}`;
   }
 
-  const targetHighFields = SEARCH_FIELDS.filter((f) => currentLevels[f] === "High");
+  const targetHighFields = [];
+  for (let i = 0; i < SEARCH_FIELDS.length; i++) {
+    if (currentLevels[SEARCH_FIELDS[i]] === "High") {
+      targetHighFields.push(SEARCH_FIELDS[i]);
+    }
+  }
   const searchBehaviorSummaryText = describeSearchBehaviorSummary(targetHighFields);
 
   const summaryCardClass = "bg-sky-50 border-sky-200";
@@ -937,91 +1191,138 @@ let historyRatioText;
         `${selectedMonthText} ไม่พบรายงานการเกิดอุทกภัยในข้อมูลที่รวบรวมไว้ ` +
         `โดย${historyRatioText} และ${rainStatusText}`;
     }
+  } else if (!riskLevel) {
+    summaryMethodologyText = "";
   } else {
-
-  
-  if (riskLevel) {
-  const levelWord =
-    { low: "สถานการณ์ปกติ", medium: "ปานกลาง", high: "สูง" }[riskLevel.key] ||
-    riskLevel.label;
-
-  const monthYearText =
-    `เดือน${thaiMonthNames[selectedMonth]} ${parseInt(selectedYear) + 543}`;
-
-  let historyClause;
-  if (floodHistory.count === 0) {
-    historyClause =
-      `ไม่พบรายงานการเกิดอุทกภัยในเดือน${thaiMonthNames[selectedMonth]} ` ;
-      
-  } else {
-    historyClause =
-      `พบรายงานการเกิดอุทกภัยในเดือน${thaiMonthNames[selectedMonth]} ` +
-      `${floodHistory.count} จาก ${floodHistory.total} ปีย้อนหลัง`;
-  }
-
-  if (!isHistoricalOnly) {
-
-    const studyYearRange = `(พ.ศ. ${REAL_DATA_YEARS[0] + 543}–${LAST_REAL_YEAR + 543})`;
-
-    let provinceHistoryClause;
-    if (floodHistory.count === 0) {
-      provinceHistoryClause =
-        `ไม่มีรายงานอุทกภัยในเดือน${thaiMonthNames[selectedMonth]}ในช่วง ${floodHistory.total} ปีที่ศึกษา ${studyYearRange}`;
-    } else if (floodHistory.count === floodHistory.total) {
-      provinceHistoryClause =
-        `มีรายงานอุทกภัยในเดือน${thaiMonthNames[selectedMonth]}ครบทั้ง ${floodHistory.total} ปีที่ศึกษา ${studyYearRange}`;
-    } else {
-      provinceHistoryClause =
-        `มีรายงานอุทกภัยในเดือน${thaiMonthNames[selectedMonth]} ${floodHistory.count} จาก ${floodHistory.total} ปีที่ศึกษา ${studyYearRange}`;
-    }
-
-    const provinceNamePart =
-      selectedProvince === "กรุงเทพมหานคร" ? selectedProvince : `จังหวัด${selectedProvince}`;
-    const historySentence = `${provinceNamePart}${provinceHistoryClause}`;
-
+    let levelWord;
     if (riskLevel.key === "low") {
-      summaryMethodologyText = `${historySentence} จึงอยู่ในสถานการณ์ปกติ`;
+      levelWord = "สถานการณ์ปกติ";
+    } else if (riskLevel.key === "medium") {
+      levelWord = "ปานกลาง";
+    } else if (riskLevel.key === "high") {
+      levelWord = "สูง";
     } else {
-      summaryMethodologyText = `${historySentence} โดยระบบประเมินระดับเฝ้าระวังอยู่ในระดับ${levelWord}`;
+      levelWord = riskLevel.label;
     }
 
-  } else {
+    if (isHistoricalOnly) {
+      const monthYearText =
+        `เดือน${thaiMonthNames[selectedMonth]} ${parseInt(selectedYear) + 543}`;
 
-    summaryMethodologyText =
-      `${monthYearText} ${historyClause} ` +
-      `สะท้อนระดับการเกิดอุทกภัยย้อนหลัง${levelWord} ` ;
-  }
+      let historyClause;
+      if (floodHistory.count === 0) {
+        historyClause =
+          `ไม่พบรายงานการเกิดอุทกภัยในเดือน${thaiMonthNames[selectedMonth]} `;
+      } else {
+        historyClause =
+          `พบรายงานการเกิดอุทกภัยในเดือน${thaiMonthNames[selectedMonth]} ` +
+          `${floodHistory.count} จาก ${floodHistory.total} ปีย้อนหลัง`;
+      }
 
+      summaryMethodologyText =
+        `${monthYearText} ${historyClause} ` +
+        `สะท้อนระดับการเกิดอุทกภัยย้อนหลัง${levelWord} `;
+    } else {
+      const studyYearRange = `(พ.ศ. ${REAL_DATA_YEARS[0] + 543}–${LAST_REAL_YEAR + 543})`;
 
-  if (sortedRules.length > 0) {
+      let provinceHistoryClause;
+      if (floodHistory.count === 0) {
+        provinceHistoryClause =
+          `ไม่มีรายงานอุทกภัยในเดือน${thaiMonthNames[selectedMonth]}ในช่วง ${floodHistory.total} ปีที่ศึกษา ${studyYearRange}`;
+      } else if (floodHistory.count === floodHistory.total) {
+        provinceHistoryClause =
+          `มีรายงานอุทกภัยในเดือน${thaiMonthNames[selectedMonth]}ครบทั้ง ${floodHistory.total} ปีที่ศึกษา ${studyYearRange}`;
+      } else {
+        provinceHistoryClause =
+          `มีรายงานอุทกภัยในเดือน${thaiMonthNames[selectedMonth]} ${floodHistory.count} จาก ${floodHistory.total} ปีที่ศึกษา ${studyYearRange}`;
+      }
 
-    const topRule = selectDiverseRules(sortedRules, 1)[0];
+      let provinceNamePart;
+      if (selectedProvince === "กรุงเทพมหานคร") {
+        provinceNamePart = selectedProvince;
+      } else {
+        provinceNamePart = `จังหวัด${selectedProvince}`;
+      }
+      const historySentence = `${provinceNamePart}${provinceHistoryClause}`;
 
-    const ruleTopics = [];
-    if (topRule) {
-      const ruleItems = asArray(topRule.antecedents).concat(asArray(topRule.consequents));
-      for (let i = 0; i < ruleItems.length; i++) {
-        const item = ruleItems[i];
-        const topic = item === "rain_level_High" ? "ปริมาณฝน" : `“${ruleItemWord(item)}”`;
-        if (ruleTopics.indexOf(topic) === -1) ruleTopics.push(topic);
+      if (riskLevel.key === "low") {
+        summaryMethodologyText = `${historySentence} จึงอยู่ในสถานการณ์ปกติ`;
+      } else {
+        summaryMethodologyText = `${historySentence} โดยระบบประเมินระดับเฝ้าระวังอยู่ในระดับ${levelWord}`;
       }
     }
 
-    let associationClause = "เมื่อพิจารณาข้อมูล Google Trends ในเดือนที่เลือก";
-    if (ruleTopics.length > 0) {
-      associationClause =
-        associationClause +
-        ` พบการสืบค้นคำว่า ${joinThaiList(ruleTopics)} ซึ่งตรงกับรูปแบบความสัมพันธ์ที่ค้นพบจากการวิเคราะห์ข้อมูลย้อนหลัง`;
-    }
+    if (sortedRules.length > 0) {
+      const topRule = selectDiverseRules(sortedRules, 1)[0];
 
-    summaryMethodologyText = `${summaryMethodologyText} ${associationClause}`;
+      const ruleTopics = [];
+      if (topRule) {
+        const ruleItems = asArray(topRule.antecedents).concat(asArray(topRule.consequents));
+        for (let i = 0; i < ruleItems.length; i++) {
+          const item = ruleItems[i];
+          const topic = item === "rain_level_High" ? "ปริมาณฝน" : `“${ruleItemWord(item)}”`;
+          if (ruleTopics.indexOf(topic) === -1) ruleTopics.push(topic);
+        }
+      }
+
+      let associationClause = "เมื่อพิจารณาข้อมูล Google Trends ในเดือนที่เลือก";
+      if (ruleTopics.length > 0) {
+        associationClause =
+          associationClause +
+          ` พบการสืบค้นคำว่า ${joinThaiList(ruleTopics)} ซึ่งตรงกับรูปแบบความสัมพันธ์ที่ค้นพบจากการวิเคราะห์ข้อมูลย้อนหลัง`;
+      }
+
+      summaryMethodologyText = `${summaryMethodologyText} ${associationClause}`;
+    }
   }
 
-} else {
-  summaryMethodologyText =
-    "";
-}
-}
+  const adviceBulletItems = [];
+  if (riskLevel && riskLevel.advice) {
+    for (let i = 0; i < riskLevel.advice.bullets.length; i++) {
+      adviceBulletItems.push(
+        <li
+          key={i}
+          className="flex gap-2 text-[15px] font-semibold leading-relaxed text-slate-700"
+        >
+          <span className="shrink-0 text-emerald-600" aria-hidden="true">✓</span>
+          <span>{riskLevel.advice.bullets[i]}</span>
+        </li>
+      );
+    }
+  }
+
+  const districtOptionElements = [];
+  for (let i = 0; i < reportedAreas.districts.length; i++) {
+    const district = reportedAreas.districts[i];
+    districtOptionElements.push(
+      <option key={district.name} value={district.name}>
+        {districtLabel}{district.name}
+      </option>
+    );
+  }
+
+  let selectedDistrictYearsText = "";
+  const selectedDistrictSubdistrictItems = [];
+  if (selectedDistrictData) {
+    const yearTexts = [];
+    for (let i = 0; i < selectedDistrictData.years.length; i++) {
+      yearTexts.push(selectedDistrictData.years[i] + 543);
+    }
+    selectedDistrictYearsText = yearTexts.join(", ");
+
+    for (let i = 0; i < selectedDistrictData.subdistricts.length; i++) {
+      const subdistrict = selectedDistrictData.subdistricts[i];
+      selectedDistrictSubdistrictItems.push(
+        <div key={subdistrict.name} className="flex flex-col gap-0.5">
+          <span className="text-[13px] font-bold text-slate-700">{subdistrictLabel}{subdistrict.name}</span>
+          {selectedProvince !== "กรุงเทพมหานคร" && (
+            <span className="text-xs font-semibold text-slate-500">{subdistrict.mooText}</span>
+          )}
+        </div>
+      );
+    }
+  }
+
   return (
     <div className="space-y-6">
 
@@ -1180,15 +1481,7 @@ let historyRatioText;
             แนวทางเตรียมความพร้อม: {riskLevel.advice.title}
           </p>
           <ul className="m-0 flex list-none flex-col gap-1.5 pl-0">
-            {riskLevel.advice.bullets.map((bullet, index) => (
-              <li
-                key={index}
-                className="flex gap-2 text-[15px] font-semibold leading-relaxed text-slate-700"
-              >
-                <span className="shrink-0 text-emerald-600" aria-hidden="true">✓</span>
-                <span>{bullet}</span>
-              </li>
-            ))}
+            {adviceBulletItems}
           </ul>
           {riskLevel.advice.note && (
             <p className="m-0 text-xs font-semibold leading-relaxed text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
@@ -1246,11 +1539,7 @@ let historyRatioText;
                     className="flex-1 bg-transparent py-3 text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer w-full"
                   >
                     <option value="">— เลือก{districtLabel} —</option>
-                    {reportedAreas.districts.map((d) => (
-                      <option key={d.name} value={d.name}>
-                        {districtLabel}{d.name}
-                      </option>
-                    ))}
+                    {districtOptionElements}
                   </select>
                   <div className="pointer-events-none text-slate-400 ml-2">
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
@@ -1262,16 +1551,9 @@ let historyRatioText;
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 flex flex-col gap-2.5">
                   <p className="m-0 pb-2 border-b border-slate-200 text-[11px] font-bold text-slate-400">
                     เหตุการณ์ล่าสุด: {selectedDistrictData.latestDate ? formatThaiDate(selectedDistrictData.latestDate) : "ไม่ระบุวันที่"}
-                    {" · "}ปีที่เคยมีรายงาน: {selectedDistrictData.years.map((y) => y + 543).join(", ")}
+                    {" · "}ปีที่เคยมีรายงาน: {selectedDistrictYearsText}
                   </p>
-                  {selectedDistrictData.subdistricts.map((s) => (
-                    <div key={s.name} className="flex flex-col gap-0.5">
-                      <span className="text-[13px] font-bold text-slate-700">{subdistrictLabel}{s.name}</span>
-                      {selectedProvince !== "กรุงเทพมหานคร" && (
-                        <span className="text-xs font-semibold text-slate-500">{s.mooText}</span>
-                      )}
-                    </div>
-                  ))}
+                  {selectedDistrictSubdistrictItems}
                 </div>
               )}
 

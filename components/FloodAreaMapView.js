@@ -68,6 +68,29 @@ function countMoo(mooText) {
   return found.length;
 }
 
+// แปลงปี ค.ศ. เป็น พ.ศ. แล้วต่อเป็นข้อความคั่นด้วยจุลภาค เช่น "2563, 2565"
+function buildYearsText(years) {
+  const buddhistYears = [];
+  for (let i = 0; i < years.length; i++) {
+    buddhistYears.push(years[i] + 543);
+  }
+  return buddhistYears.join(', ');
+}
+
+// สร้างรายการ <li> จากตำบลที่หาพิกัดไม่เจอ ใช้ร่วมกันทั้งใน UnmatchedNotice และตอนไม่มีหมุดเลย
+function buildUnmatchedListItems(unmatched, districtLabel, subdistrictLabel) {
+  const items = [];
+  for (let i = 0; i < unmatched.length; i++) {
+    const item = unmatched[i];
+    items.push(
+      <li key={i}>
+        {districtLabel}{item.district} · {subdistrictLabel}{item.subdistrict}
+      </li>
+    );
+  }
+  return items;
+}
+
 const ZOOM_ON_CLICK = 14;
 const ZOOM_ON_CLUSTER_CLICK = 13;
 
@@ -100,6 +123,26 @@ function ResetViewButton({ markers }) {
         >
           ดูทั้งจังหวัด
         </button>
+      </div>
+    </div>
+  );
+}
+
+// แจ้งรายชื่อตำบลที่หาพิกัดไม่เจอเลย (ไม่มีแม้แต่จุดกลางอำเภอให้ตกไปใช้) แทนการปล่อยให้หายไปเงียบๆ
+function UnmatchedNotice({ unmatched, districtLabel, subdistrictLabel }) {
+  if (!unmatched || unmatched.length === 0) return null;
+
+  const listItems = buildUnmatchedListItems(unmatched, districtLabel, subdistrictLabel);
+
+  return (
+    <div className="leaflet-bottom leaflet-left">
+      <div className="leaflet-control bg-white/95 rounded-lg border border-amber-200 shadow-sm px-3 py-2 text-[11px] text-slate-600 max-w-[240px]">
+        <div className="font-bold text-amber-700 mb-1">
+          ไม่พบพิกัดอีก {unmatched.length} {subdistrictLabel}
+        </div>
+        <ul className="list-disc pl-4 space-y-0.5 max-h-24 overflow-y-auto">
+          {listItems}
+        </ul>
       </div>
     </div>
   );
@@ -163,10 +206,12 @@ export default function FloodAreaMapView({ districts, province }) {
     return buildPointIndex(points);
   }, [points]);
 
-  const markers = useMemo(() => {
-    if (!index) return [];
-    return buildFloodMarkers(districts, index, province).markers;
+  const markerResult = useMemo(() => {
+    if (!index) return { markers: [], unmatched: [] };
+    return buildFloodMarkers(districts, index, province);
   }, [index, districts, province]);
+  const markers = markerResult.markers;
+  const unmatched = markerResult.unmatched;
 
   const clusters = useMemo(() => buildDistrictClusters(markers), [markers]);
   const showClusters = clusters.length > 1 && zoom < CLUSTER_ZOOM_THRESHOLD;
@@ -208,11 +253,111 @@ export default function FloodAreaMapView({ districts, province }) {
   const center = getMarkersCenter(markers);
 
   if (markers.length === 0) {
+    if (unmatched.length > 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-2 p-4 text-center">
+          <p className="text-slate-400 text-sm font-bold">
+            ไม่พบพิกัดของพื้นที่ที่เคยเกิดอุทกภัย
+          </p>
+          <ul className="text-xs text-slate-500 list-disc pl-4 text-left">
+            {buildUnmatchedListItems(unmatched, districtLabel, subdistrictLabel)}
+          </ul>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-center h-full text-slate-400 text-sm font-bold">
         ไม่พบพิกัดของพื้นที่ที่เคยเกิดอุทกภัย
       </div>
     );
+  }
+
+  const mapMarkerElements = [];
+  if (showClusters) {
+    for (let i = 0; i < clusters.length; i++) {
+      const cluster = clusters[i];
+      mapMarkerElements.push(
+        <CircleMarker
+          key={cluster.district}
+          center={[cluster.lat, cluster.lon]}
+          radius={getRadius(cluster.mooCount) + 2}
+          pathOptions={{
+            color: '#ffffff',
+            weight: 1.5,
+            fillColor: COLOR_CLUSTER,
+            fillOpacity: 0.8,
+          }}
+          eventHandlers={{
+            // แตะกลุ่มแล้วซูมเข้าไปจนแยกเห็นหมุดตำบลทีละจุด
+            click: (event) => {
+              event.target._map.flyTo([cluster.lat, cluster.lon], ZOOM_ON_CLUSTER_CLICK);
+            },
+          }}
+        >
+          <Popup>
+            <div className="text-[13px] leading-relaxed">
+              <div className="font-bold text-slate-800">{districtLabel}{cluster.district}</div>
+              <div className="mt-1 text-slate-700">
+                {cluster.tambonCount} {subdistrictLabel}ที่เคยมีรายงานในเดือนนี้
+              </div>
+              <div className="mt-1 text-slate-400 text-[11px]">แตะเพื่อซูมดูราย{subdistrictLabel}</div>
+            </div>
+          </Popup>
+        </CircleMarker>
+      );
+    }
+  } else {
+    for (let i = 0; i < markers.length; i++) {
+      const marker = markers[i];
+
+      let markerColor;
+      if (marker.level === 'tambon') {
+        markerColor = COLOR_TAMBON;
+      } else {
+        markerColor = COLOR_DISTRICT_FALLBACK;
+      }
+
+      mapMarkerElements.push(
+        <CircleMarker
+          key={marker.key}
+          center={[marker.lat, marker.lon]}
+          radius={getRadius(countMoo(marker.mooText))}
+          pathOptions={{
+            color: '#ffffff',
+            weight: 1.5,
+            fillColor: markerColor,
+            fillOpacity: 0.75,
+          }}
+          eventHandlers={{
+            // แตะหมุดแล้วซูมเข้าไปดูบริเวณตำบลนั้น
+            click: (event) => {
+              event.target._map.flyTo([marker.lat, marker.lon], ZOOM_ON_CLICK);
+            },
+          }}
+        >
+          <Popup>
+            <div className="text-[13px] leading-relaxed">
+              <div className="font-bold text-slate-800">
+                {subdistrictLabel}{marker.subdistrict}
+              </div>
+              <div className="text-slate-500">{districtLabel}{marker.district}</div>
+              <div className="mt-1 text-slate-700">{marker.mooText}</div>
+              <div className="mt-1 text-slate-400 text-[11px]">
+                ปีที่เคยมีรายงาน {buildYearsText(marker.years)}
+              </div>
+              {marker.level === 'district' && (
+                <div className="mt-1 text-amber-600 text-[11px]">
+                  แสดงที่จุดกลาง{districtLabel} เพราะไม่พบพิกัดของ{subdistrictLabel}นี้
+                </div>
+              )}
+              <div className="mt-1.5 pt-1.5 border-t border-slate-200 text-slate-400 text-[11px]">
+                หมุดอยู่ที่จุดกลาง{subdistrictLabel} ไม่ใช่ตำแหน่งของหมู่ และไม่ใช่ขอบเขตน้ำท่วมจริง
+              </div>
+            </div>
+          </Popup>
+        </CircleMarker>
+      );
+    }
   }
 
   return (
@@ -232,79 +377,9 @@ export default function FloodAreaMapView({ districts, province }) {
       <FitToMarkers markers={markers} />
       <ResetViewButton markers={markers} />
       <ZoomWatcher onZoomChange={setZoom} />
+      <UnmatchedNotice unmatched={unmatched} districtLabel={districtLabel} subdistrictLabel={subdistrictLabel} />
 
-      {showClusters ? (
-        clusters.map((cluster) => (
-          <CircleMarker
-            key={cluster.district}
-            center={[cluster.lat, cluster.lon]}
-            radius={getRadius(cluster.mooCount) + 2}
-            pathOptions={{
-              color: '#ffffff',
-              weight: 1.5,
-              fillColor: COLOR_CLUSTER,
-              fillOpacity: 0.8,
-            }}
-            eventHandlers={{
-              // แตะกลุ่มแล้วซูมเข้าไปจนแยกเห็นหมุดตำบลทีละจุด
-              click: (event) => {
-                event.target._map.flyTo([cluster.lat, cluster.lon], ZOOM_ON_CLUSTER_CLICK);
-              },
-            }}
-          >
-            <Popup>
-              <div className="text-[13px] leading-relaxed">
-                <div className="font-bold text-slate-800">{districtLabel}{cluster.district}</div>
-                <div className="mt-1 text-slate-700">
-                  {cluster.tambonCount} {subdistrictLabel}ที่เคยมีรายงานในเดือนนี้
-                </div>
-                <div className="mt-1 text-slate-400 text-[11px]">แตะเพื่อซูมดูราย{subdistrictLabel}</div>
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))
-      ) : (
-        markers.map((marker) => (
-          <CircleMarker
-            key={marker.key}
-            center={[marker.lat, marker.lon]}
-            radius={getRadius(countMoo(marker.mooText))}
-            pathOptions={{
-              color: '#ffffff',
-              weight: 1.5,
-              fillColor: marker.level === 'tambon' ? COLOR_TAMBON : COLOR_DISTRICT_FALLBACK,
-              fillOpacity: 0.75,
-            }}
-            eventHandlers={{
-              // แตะหมุดแล้วซูมเข้าไปดูบริเวณตำบลนั้น
-              click: (event) => {
-                event.target._map.flyTo([marker.lat, marker.lon], ZOOM_ON_CLICK);
-              },
-            }}
-          >
-            <Popup>
-              <div className="text-[13px] leading-relaxed">
-                <div className="font-bold text-slate-800">
-                  {subdistrictLabel}{marker.subdistrict}
-                </div>
-                <div className="text-slate-500">{districtLabel}{marker.district}</div>
-                <div className="mt-1 text-slate-700">{marker.mooText}</div>
-                <div className="mt-1 text-slate-400 text-[11px]">
-                  ปีที่เคยมีรายงาน {marker.years.map((y) => y + 543).join(', ')}
-                </div>
-                {marker.level === 'district' && (
-                  <div className="mt-1 text-amber-600 text-[11px]">
-                    แสดงที่จุดกลาง{districtLabel} เพราะไม่พบพิกัดของ{subdistrictLabel}นี้
-                  </div>
-                )}
-                <div className="mt-1.5 pt-1.5 border-t border-slate-200 text-slate-400 text-[11px]">
-                  หมุดอยู่ที่จุดกลาง{subdistrictLabel} ไม่ใช่ตำแหน่งของหมู่ และไม่ใช่ขอบเขตน้ำท่วมจริง
-                </div>
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))
-      )}
+      {mapMarkerElements}
     </MapContainer>
   );
 }

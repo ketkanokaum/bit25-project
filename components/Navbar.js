@@ -24,6 +24,33 @@ export default function Navbar() {
     },
   ];
 
+  const navLinkItems = [];
+  for (let i = 0; i < navItems.length; i++) {
+    const item = navItems[i];
+
+    let isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+    if (item.href === '/') {
+      isActive = pathname === '/';
+    }
+
+    let linkColorClasses = 'text-sky-100 hover:text-white hover:bg-white/10';
+    if (isActive) {
+      linkColorClasses = 'bg-white text-sky-700 shadow-sm';
+    }
+
+    navLinkItems.push(
+      <Link
+        key={item.href}
+        href={item.href}
+        prefetch={false}
+        className={`px-3.5 md:px-5 py-2 rounded-full text-xs md:text-sm font-bold transition-all duration-200 whitespace-nowrap ${linkColorClasses}`}
+      >
+        <span className="md:hidden">{item.shortLabel}</span>
+        <span className="hidden md:inline">{item.label}</span>
+      </Link>
+    );
+  }
+
   return (
     <div className="sticky top-4 z-50 w-full flex justify-center px-4 pointer-events-none">
       <nav className="pointer-events-auto flex items-center justify-between gap-1.5 md:gap-3 bg-sky-700/90 backdrop-blur-md p-2 rounded-full border border-sky-500/30 shadow-xl shadow-sky-950/20 max-w-fit">
@@ -53,28 +80,7 @@ export default function Navbar() {
 
         {/* รายการเมนูหลัก */}
         <div className="flex items-center gap-1 md:gap-2">
-          {navItems.map((item) => {
-            const isActive =
-              item.href === '/'
-                ? pathname === '/'
-                : pathname === item.href || pathname.startsWith(item.href + '/');
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                prefetch={false}
-                className={`px-3.5 md:px-5 py-2 rounded-full text-xs md:text-sm font-bold transition-all duration-200 whitespace-nowrap ${
-                  isActive
-                    ? 'bg-white text-sky-700 shadow-sm'
-                    : 'text-sky-100 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <span className="md:hidden">{item.shortLabel}</span>
-                <span className="hidden md:inline">{item.label}</span>
-              </Link>
-            );
-          })}
+          {navLinkItems}
         </div>
 
       </nav>
