@@ -1169,21 +1169,21 @@ let historyRatioText;
     <div className="mt-1 flex flex-col divide-y divide-slate-200/70">
 
       {summaryMethodologyText && (
-        <p className="m-0 py-4 text-sm font-semibold leading-normal text-slate-700">
+        <p className="m-0 py-4 text-[15px] font-semibold leading-relaxed text-slate-700">
           {summaryMethodologyText}
         </p>
       )}
 
       {riskLevel?.advice && (riskLevel.key === "medium" || riskLevel.key === "high") && (
         <div className="pt-4 flex flex-col gap-3">
-          <p className="m-0 text-sm font-black text-slate-800">
+          <p className="m-0 text-[15px] font-black text-slate-800">
             แนวทางเตรียมความพร้อม: {riskLevel.advice.title}
           </p>
           <ul className="m-0 flex list-none flex-col gap-1.5 pl-0">
             {riskLevel.advice.bullets.map((bullet, index) => (
               <li
                 key={index}
-                className="flex gap-2 text-sm font-semibold leading-relaxed text-slate-700"
+                className="flex gap-2 text-[15px] font-semibold leading-relaxed text-slate-700"
               >
                 <span className="shrink-0 text-emerald-600" aria-hidden="true">✓</span>
                 <span>{bullet}</span>
@@ -1201,7 +1201,7 @@ let historyRatioText;
     </div>
   ) : (
     /* กรณีดูข้อมูลย้อนหลัง */
-    <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">
+    <p className="mt-2 text-[15px] font-semibold leading-relaxed text-slate-600">
       {summaryDetail}
     </p>
   )}

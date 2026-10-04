@@ -420,14 +420,14 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
         <>
           {highlightForecast && (
             <div className={`rounded-2xl border shadow-sm p-6 ${highlightStyle.border} ${highlightStyle.bg}`}>
-              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-6 items-start">
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-6 items-start">
 
                 <div>
-                  <p className="text-[12px] font-bold text-slate-500 tracking-wide">
-                    🌧️ แนวโน้มปริมาณน้ำฝน
+                  <p className="text-[14px] font-bold text-slate-500 tracking-wide">
+                    แนวโน้มปริมาณน้ำฝน
                   </p>
                   <p className="text-xl font-black text-slate-700 leading-tight mt-1">
-                    {highlightMonthName} {data.year + 543}
+                    เดือน {highlightMonthName} {data.year + 543}
                   </p>
                   <p className="text-[44px] font-black text-slate-800 leading-none mt-1">
                     {formatMm(highlightForecast.predicted_rain)}
@@ -438,11 +438,8 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                       {highlightTier.label}
                     </span>
                   </div>
-                </div>
-
-                <div className="flex flex-row lg:flex-col gap-6 lg:gap-5">
                   {highlightRangeText && (
-                    <div>
+                    <div className="mt-4">
                       <p className="text-xs text-slate-500">ช่วงแนวโน้มปริมาณน้ำฝน</p>
                       <p className="text-lg font-black text-slate-800 mt-0.5">{highlightRangeText}</p>
                     </div>
@@ -450,9 +447,9 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                 </div>
 
                 {highlightSummarySentence && (
-                  <div className="bg-white/70 border border-white rounded-xl p-4">
-                    <p className="text-xs font-bold text-slate-600 mb-1">สรุปภาพรวม</p>
-                    <p className="text-[13px] leading-relaxed text-slate-600">
+                  <div className="bg-white/70 border border-white rounded-xl p-5 h-full flex flex-col ">
+                    <p className="text-base  font-bold text-slate-600 mb-4">สรุปภาพรวม</p>
+                    <p className="text-[15px] leading-relaxed text-slate-700">
                       {highlightSummarySentence}
                     </p>
                   </div>
@@ -486,17 +483,18 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
 
                 {isComparing && compareLines}
 
-                {/* {!isComparing && (
+                {!isComparing && (
                   <Area
                     dataKey="forecastRange"
                     name="ช่วงคาดการณ์"
+                    legendType="none"
                     stroke="none"
                     fill={highlightTier.hex.dot}
                     fillOpacity={0.25}
                     connectNulls={true}
                     isAnimationActive={false}
                   />
-                )} */}
+                )}
 
                 {!isComparing && (
                   <Line
