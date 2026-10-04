@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { CircularProgress } from "@mui/material";
 import dynamic from "next/dynamic";
 import TuneIcon from "@mui/icons-material/Tune";
@@ -14,23 +14,9 @@ import TimelineIcon from "@mui/icons-material/Timeline";
 import PlaceIcon from "@mui/icons-material/Place";
 import { provinceRegions, regionOrder } from "@/lib/constants/provinces";
 import { groupReportedAreas } from "@/lib/flood-areas";
-import { percentOfNormal, classifyRainLevel } from "@/lib/rainlevel";
-import {
-  getDataBoundaries,
-  getAllYears,
-  predictFlood,
-  getFloodEvents,
-  didFloodHappen,
-  getMonthRow,
-  getBaseline,
-  REAL_DATA_YEARS,
-  LAST_REAL_YEAR,
-  SEARCH_FIELDS,
-  SEARCH_LABELS,
-  getMonitoringLevelInfo,
-  ASSESSMENT_HISTORICAL_ONLY,
-  METHOD_MODEL,
-} from "@/lib/prediction";
+import { classifyFloodRisk, isHighFloodRisk } from "@/lib/rainlevel";
+import { getAllYears, predictFlood, getFloodEvents, didFloodHappen, getMonthRow, REAL_DATA_YEARS, LAST_REAL_YEAR, SEARCH_FIELDS, SEARCH_LABELS, 
+getMonitoringLevelInfo, ASSESSMENT_HISTORICAL_ONLY, METHOD_MODEL } from "@/lib/prediction";
 
 const FloodAreaMapView = dynamic(() => import("@/components/FloodAreaMapView"), {
   ssr: false,
@@ -68,7 +54,7 @@ function formatCountOrDash(n) {
 
 function translateWord(word) {
   const dict = {
-    rain_level_High: "ปริมาณฝนสูงกว่าปกติ",
+    rain_level_High: "ปริมาณฝนตั้งแต่ระดับปานกลางถึงสูง",
     search_rain: "ค้นหา 'ฝนตก'",
     search_flood: "ค้นหา 'น้ำท่วม'",
     search_storm: "ค้นหา 'พายุ'",
@@ -112,7 +98,7 @@ function asArray(x) {
 const SEARCH_INDEX_MIN = 1;
 
 
-function buildCurrentLevels(monthRow, baseline) {
+function buildCurrentLevels(monthRow) {
   const levels = {};
 
   for (let i = 0; i < SEARCH_FIELDS.length; i++) {
@@ -132,15 +118,8 @@ function buildCurrentLevels(monthRow, baseline) {
     levels[field] = value >= SEARCH_INDEX_MIN ? "High" : "NotHigh";
   }
 
-  if (
-    monthRow &&
-    monthRow.average_rain != null &&
-    baseline.value != null &&
-    baseline.value !== 0
-  ) {
-    const rain = parseFloat(monthRow.average_rain);
-    const percent = (rain / baseline.value) * 100;
-    levels.rain = percent > 110 ? "High" : "NotHigh";
+  if (monthRow && monthRow.average_rain != null) {
+    levels.rain = isHighFloodRisk(monthRow.average_rain) ? "High" : "NotHigh";
   } else {
     levels.rain = "NoData";
   }
@@ -211,20 +190,84 @@ function filterRulesByConfidence(rules, threshold) {
   return result;
 }
 
-export default function FloodSearchPatterns({ initialData = [], initialRules = [], initialFloodEvents = [] }) {
+const EMPTY_BOUNDARIES = { searchEndYear: 0, searchEndMonth: 0, rainEndYear: 0, rainEndMonth: 0, lastSelectableYear: LAST_REAL_YEAR };
+
+export default function FloodSearchPatterns({
+  initialProvince = "ขอนแก่น",
+  initialData = [],
+  initialRules = [],
+  initialFloodEvents = [],
+  boundaries = EMPTY_BOUNDARIES,
+}) {
   const [isClient, setIsClient] = useState(false);
-  const data = initialData;
-  const rulesArray = Array.isArray(initialRules) ? initialRules : [];
 
+  // แคชข้อมูลรายจังหวัดไว้ในฝั่ง client เพื่อไม่ต้องยิง API ซ้ำเมื่อสลับกลับไปจังหวัดที่เคยโหลดแล้ว
+  // (เติมข้อมูลจังหวัดเริ่มต้นเข้าแคชใน useEffect ด้านล่าง ไม่อ่านค่า ref ระหว่าง render)
+  const provinceCacheRef = useRef({});
+  const [currentProvinceData, setCurrentProvinceData] = useState(() => ({
+    data: initialData,
+    rules: Array.isArray(initialRules) ? initialRules : [],
+    floodEvents: Array.isArray(initialFloodEvents) ? initialFloodEvents : [],
+  }));
+  const [loadingProvinceData, setLoadingProvinceData] = useState(false);
 
-  const floodEvents = Array.isArray(initialFloodEvents) ? initialFloodEvents : [];
-  const boundaries = useMemo(() => getDataBoundaries(data), [data]);
+  const data = currentProvinceData.data;
+  const rulesArray = currentProvinceData.rules;
+  const floodEvents = currentProvinceData.floodEvents;
+
   const baseYears = useMemo(() => getAllYears(boundaries.lastSelectableYear), [boundaries]);
-  const [selectedProvince, setSelectedProvince] = useState("ขอนแก่น");
+  const [selectedProvince, setSelectedProvince] = useState(initialProvince);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.1);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedYear, setSelectedYear] = useState("2026");
   const [selectedMonth, setSelectedMonth] = useState(1);
+
+  // โหลดข้อมูลของจังหวัดที่เลือกเฉพาะตอนที่ยังไม่มีอยู่ในแคช (ลดการดึงข้อมูลทุกจังหวัดพร้อมกันตั้งแต่เปิดหน้า)
+  useEffect(() => {
+    if (!provinceCacheRef.current[initialProvince]) {
+      provinceCacheRef.current[initialProvince] = {
+        data: initialData,
+        rules: Array.isArray(initialRules) ? initialRules : [],
+        floodEvents: Array.isArray(initialFloodEvents) ? initialFloodEvents : [],
+      };
+    }
+
+    const cached = provinceCacheRef.current[selectedProvince];
+    if (cached) {
+      setCurrentProvinceData(cached);
+      setLoadingProvinceData(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingProvinceData(true);
+
+    fetch(`/api/pattern?province=${encodeURIComponent(selectedProvince)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("โหลดข้อมูลจังหวัดไม่สำเร็จ");
+        return res.json();
+      })
+      .then((json) => {
+        if (cancelled) return;
+        const entry = {
+          data: Array.isArray(json.data) ? json.data : [],
+          rules: Array.isArray(json.rules) ? json.rules : [],
+          floodEvents: Array.isArray(json.floodEvents) ? json.floodEvents : [],
+        };
+        provinceCacheRef.current[selectedProvince] = entry;
+        setCurrentProvinceData(entry);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCurrentProvinceData({ data: [], rules: [], floodEvents: [] });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProvinceData(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [selectedProvince, initialProvince, initialData, initialRules, initialFloodEvents]);
 
   useEffect(() => {
     const now = new Date();
@@ -309,14 +352,9 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
     avgRain = Math.round(parseFloat(monthRow.average_rain));
   }
 
-  const baseline = useMemo(
-    () => getBaseline(data, selectedProvince, selectedMonth),
-    [data, selectedProvince, selectedMonth]
-  );
-
   const currentLevels = useMemo(() => {
-    return buildCurrentLevels(monthRow, baseline);
-  }, [monthRow, baseline]);
+    return buildCurrentLevels(monthRow);
+  }, [monthRow]);
 
  
   const candidateRules = useMemo(() => {
@@ -408,17 +446,6 @@ export default function FloodSearchPatterns({ initialData = [], initialRules = [
   );
   const floodHistory = prediction.history;
 
-
-  let rainVsBaselineLabel = "";
-  if (baseline.value == null) {
-    rainVsBaselineLabel = "ไม่มีปริมาณน้ำฝนปกติของเดือนนี้";
-  } else if (avgRain == null) {
-    rainVsBaselineLabel = `ค่าปกติของเดือนนี้ ${baseline.value} มม.`;
-  } else {
-
-    const rainPercent = percentOfNormal(parseFloat(monthRow.average_rain), baseline.value);
-    rainVsBaselineLabel = `${classifyRainLevel(rainPercent).label} (ค่าปกติ ${baseline.value} มม.)`;
-  }
 
   const reportedAreas = useMemo(() => {
     const years = isForecastYear ? REAL_DATA_YEARS : [parseInt(selectedYear)];
@@ -619,10 +646,7 @@ if (isForecastYear) {
   }
 
   
-  const rainTier =
-    avgRain != null && baseline.value != null
-      ? classifyRainLevel(percentOfNormal(parseFloat(monthRow.average_rain), baseline.value))
-      : null;
+  const rainTier = avgRain != null ? classifyFloodRisk(avgRain) : null;
 
   let rainStatusBoxClass =
     "px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 ";
@@ -635,10 +659,8 @@ if (isForecastYear) {
   let rainStatusText;
   if (avgRain == null) {
     rainStatusText = "ไม่มีข้อมูลปริมาณฝนเดือนนี้";
-  } else if (baseline.value == null) {
-    rainStatusText = `ฝน ${avgRain} มม. (ไม่มีค่าปกติเทียบ)`;
   } else {
-    rainStatusText = `${rainTier.label} (${avgRain} จาก ${baseline.value} มม.)`;
+    rainStatusText = `${rainTier.label} (${avgRain} มม.)`;
   }
 
   let ruleListSection;
@@ -1093,16 +1115,15 @@ let historyRatioText;
               {searchHintText}
             </p>
           )}
+
+          {loadingProvinceData && (
+            <p className="flex items-center gap-2 text-[11px] font-bold text-sky-600 mt-3 pl-2">
+              <CircularProgress size={12} />
+              กำลังโหลดข้อมูล{selectedProvince}...
+            </p>
+          )}
         </div>
 
-        {isForecastYear && (
-          <div className="px-5 pb-4 -mt-1 space-y-2">
-            {/* <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs font-bold">
-              <AutoGraphIcon fontSize="small" />
-              ปีนี้ยังไม่มีสถิติอุทกภัยยืนยัน — หาแนวโน้มจากฐานข้อมูลปี {REAL_DATA_YEARS[0] + 543}–{LAST_REAL_YEAR + 543}
-            </div> */}
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1127,7 +1148,7 @@ let historyRatioText;
             {rainValueBlock}
           </div>
           <p className="text-[11px] text-slate-400/70 font-bold mt-1">
-            {rainVsBaselineLabel}
+            {rainStatusText}
           </p>
         </div>
       </div>
@@ -1174,47 +1195,8 @@ let historyRatioText;
               {riskLevel.advice.note}
             </p>
           )}
-          {/* <div className="flex flex-wrap gap-2">
-            <a
-              href={OFFICIAL_SOURCES[0].url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 text-xs font-bold hover:bg-sky-100 transition-colors"
-            >
-              ตรวจสอบประกาศทางการ
-            </a>
-          </div> */}
-          {/* <p className="m-0 text-[11px] text-slate-400 leading-relaxed">
-            แนวทางเหล่านี้อ้างอิง{" "}
-            <a
-              href={ADVICE_SOURCE.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-slate-600"
-            >
-              {ADVICE_SOURCE.label}
-            </a>
-            {" "}· แหล่งข้อมูลอื่น: {OFFICIAL_SOURCES.slice(1).map((s) => s.name).join(" · ")}
-            {" "}· {DISCLAIMER}
-          </p> */}
         </div>
       )}
-{/* 
-      {riskLevel?.key === "low" && (
-        <div className="pt-4 flex flex-col gap-2">
-          <div className="flex flex-wrap gap-2">
-            <a
-              href={OFFICIAL_SOURCES[0].url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 text-xs font-bold hover:bg-sky-100 transition-colors"
-            >
-              ตรวจสอบประกาศทางการ
-            </a>
-          </div>
-          <p className="m-0 text-[11px] text-slate-400 leading-relaxed">{DISCLAIMER}</p>
-        </div> */}
-      
 
     </div>
   ) : (
@@ -1235,12 +1217,6 @@ let historyRatioText;
             <h3 className="text-slate-800 font-bold tracking-tight leading-none text-base">
               {areaCardTitle}
             </h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-wider">
-            
-              {/* {isForecastYear
-                ? ` อ้างอิงข้อมูลย้อนหลัง พ.ศ. ${REAL_DATA_YEARS[0] + 543}–${LAST_REAL_YEAR + 543}`
-                : `  พ.ศ. ${parseInt(selectedYear) + 543}`} */}
-            </p>
           </div>
         </div>
 
@@ -1249,7 +1225,7 @@ let historyRatioText;
             <div className="flex flex-col gap-3">
 
               <p className="m-0 text-xs text-slate-500">
-                พบ {reportedAreas.districts.length} {districtLabel}ที่เคยมีรายงาน หมุดที่อยู่ใกล้กันรวมเป็นกลุ่มไว้ ซูมเข้าเพื่อดู{subdistrictLabel}และหมู่
+                พบ {reportedAreas.districts.length} {districtLabel}ที่เคยมีรายงาน
               </p>
 
               <div className="h-[420px] rounded-2xl overflow-hidden border border-slate-200">
@@ -1258,10 +1234,6 @@ let historyRatioText;
                   province={selectedProvince}
                 />
               </div>
-
-              {/* <p className="m-0 text-[11px] text-slate-400">
-                หมุดแทนตำบลที่เคยมีรายงานอุทกภัย ไม่ใช่ตำแหน่งหรือขอบเขตน้ำท่วมจริง และไม่ได้แปลว่าพื้นที่นั้นกำลังมีน้ำท่วมอยู่ในขณะนี้
-              </p> */}
 
               <div className="flex flex-col gap-2">
                 <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest pl-2">
@@ -1288,16 +1260,18 @@ let historyRatioText;
 
               {selectedDistrictData && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 flex flex-col gap-2.5">
-                  {selectedDistrictData.subdistricts.map((s) => (
-                    <div key={s.name} className="flex flex-col gap-0.5">
-                      <span className="text-[13px] font-bold text-slate-700">{subdistrictLabel}{s.name}</span>
-                      <span className="text-xs font-semibold text-slate-500">{s.mooText}</span>
-                    </div>
-                  ))}
-                  <p className="m-0 mt-1 pt-2 border-t border-slate-200 text-[11px] font-bold text-slate-400">
+                  <p className="m-0 pb-2 border-b border-slate-200 text-[11px] font-bold text-slate-400">
                     เหตุการณ์ล่าสุด: {selectedDistrictData.latestDate ? formatThaiDate(selectedDistrictData.latestDate) : "ไม่ระบุวันที่"}
                     {" · "}ปีที่เคยมีรายงาน: {selectedDistrictData.years.map((y) => y + 543).join(", ")}
                   </p>
+                  {selectedDistrictData.subdistricts.map((s) => (
+                    <div key={s.name} className="flex flex-col gap-0.5">
+                      <span className="text-[13px] font-bold text-slate-700">{subdistrictLabel}{s.name}</span>
+                      {selectedProvince !== "กรุงเทพมหานคร" && (
+                        <span className="text-xs font-semibold text-slate-500">{s.mooText}</span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -1316,211 +1290,8 @@ let historyRatioText;
               <p className="text-slate-500 font-bold text-sm m-0">{areaEmptyText}</p>
             </div>
           )}
-
-          {/* <p className="m-0 mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-400 font-semibold leading-relaxed">
-            เป็นข้อมูลพื้นที่ที่เคยมีรายงานในอดีต ไม่ใช่การยืนยันว่าพื้นที่ดังกล่าวจะได้รับผลกระทบในครั้งนี้
-            หากอาศัยอยู่ในพื้นที่ดังกล่าว ควรติดตามประกาศของอำเภอ เทศบาล หรือองค์การบริหารส่วนตำบลอย่างใกล้ชิด
-          </p> */}
         </div>
       </div>
-      {/* <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-8 py-5 border-b border-slate-100 bg-slate-50 flex items-center gap-4">
-          <div className="p-2 rounded-lg bg-sky-700 shadow-sm text-white flex">
-            <ShowChartIcon fontSize="small" />
-          </div>
-          <div>
-            <h3 className="text-slate-800 font-bold tracking-tight leading-none text-lg">
-              {chartTitle}
-            </h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-wider">
-              {selectedProvince} · {trendSubtitle}
-            </p>
-          </div>
-        </div>
-
-        <div className="p-6">
-
-          {isForecastYear && (
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart
-                data={lineChartData}
-                margin={{ top: 25, right: 20, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-
-                <XAxis
-                  dataKey="ปี"
-                  tick={{ fontSize: 12, fontWeight: 700, fill: "#475569" }}
-                />
-
-                <YAxis
-                  yAxisId="chance"
-                  domain={[0, 3]}
-                  ticks={[0, 1, 2, 3]}
-                  tickFormatter={(v) => CHART_AXIS_LABEL[v] || ""}
-                  tick={{ fontSize: 11, fill: "#94a3b8" }}
-                />
-
-                <Tooltip
-                  formatter={forecastTooltipFormatter}
-                  labelFormatter={(label) =>
-                        `${label} · ${thaiMonthNames[selectedMonth]}  `
-                      }
-                />
-
-                <ReferenceArea
-                  yAxisId="chance"
-                  x1={`พ.ศ. ${LAST_REAL_YEAR + 543}`}
-                  x2={`พ.ศ. ${boundaries.lastSelectableYear + 543}`}
-                  fill="#8b5cf6"
-                  fillOpacity={0.07}
-                  // label={{ value: "แนวโน้ม", position: "insideTop", fontSize: 10, fill: "#8b5cf6" }}
-                />
-
-                <ReferenceLine
-                  yAxisId="chance"
-                  y={100 / 3}
-                  stroke="#f59e0b"
-                  strokeDasharray="4 4"
-                  label={{ value: "เกณฑ์ปานกลาง 33.33%", position: "insideBottomLeft", fontSize: 10, fill: "#f59e0b" }}
-                />
-
-                <ReferenceLine
-                  yAxisId="chance"
-                  y={200 / 3}
-                  stroke="#ef4444"
-                  strokeDasharray="4 4"
-                  label={{ value: "เกณฑ์สูง 66.67%", position: "insideBottomLeft", fontSize: 10, fill: "#ef4444" }}
-                />
-
-                <Line
-                  yAxisId="chance"
-                  type="monotone"
-                  dataKey="สถิติจริง"
-                  stroke="#f97316"
-                  strokeWidth={2.5}
-                  connectNulls={false}
-                  dot={actualDot}
-                />
-
-                <Line
-                  yAxisId="chance"
-                  type="monotone"
-                  dataKey="ค่าแนวโน้ม"
-                  stroke="#8b5cf6"
-                  strokeWidth={2.5}
-                  strokeDasharray="7 4"
-                  connectNulls={true}
-                  dot={forecastDot}
-                />
-
-                <ReferenceLine
-                  yAxisId="chance"
-                  x={`พ.ศ. ${LAST_REAL_YEAR + 1 + 543}`}
-                  stroke="#8b5cf6"
-                  strokeDasharray="4 2"
-                  strokeOpacity={0.5}
-                  label={{ value: "หมดข้อมูลจริง", position: "top", fontSize: 10, fill: "#8b5cf6" }}
-                />
-
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-
-          {!isForecastYear && (
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart
-                data={monthWindowData}
-                margin={{ top: 25, right: 20, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-
-                <XAxis
-                  dataKey="label"
-                  tick={monthWindowTick}
-                />
-
-                <YAxis
-                  yAxisId="chance"
-                  domain={[0, 1]}
-                  ticks={[0, 1]}
-                  tickFormatter={(v) => HISTORICAL_AXIS_LABEL[v] || ""}
-                  tick={{ fontSize: 11, fill: "#94a3b8" }}
-                />
-
-                <Tooltip
-                  formatter={monthWindowTooltipFormatter}
-                />
-
-
-                <Line
-                  yAxisId="chance"
-                  type="monotone"
-                  dataKey="สถานะอุทกภัย"
-                  stroke="#f97316"
-                  strokeWidth={2.5}
-                  connectNulls={true}
-                  dot={monthWindowDot}
-                />
-
-                {selectedWindowEntry && (
-                  <ReferenceLine
-                    yAxisId="chance"
-                    x={selectedWindowEntry.label}
-                    stroke="#ef4444"
-                    strokeWidth={1.5}
-                    strokeDasharray="3 3"
-                    strokeOpacity={0.5}
-                    label={{
-                      value: "เดือนที่เลือก",
-                      position: "top",
-                      fontSize: 10,
-                      fill: "#ef4444",
-                    }}
-                  />
-                )}
-
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-
-          {!isForecastYear ? (
-            <div className="flex flex-wrap items-center gap-5 mt-4 justify-center">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />
-                <span className="text-xs font-bold text-slate-500">พบรายงานอุทกภัย</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-slate-400 inline-block" />
-                <span className="text-xs font-bold text-slate-500">ไม่พบรายงานอุทกภัย</span>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2 mt-4">
-              <div className="flex flex-wrap items-center gap-5 justify-center">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-green-500 inline-block" />
-                  <span className="text-xs font-bold text-slate-500">สถานการณ์ปกติ</span>
-
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-amber-500 inline-block" />
-                  <span className="text-xs font-bold text-slate-500">เฝ้าระวังปานกลาง</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />
-                  <span className="text-xs font-bold text-slate-500">เฝ้าระวังสูง</span>
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-400 text-center max-w-md">
-                คะแนนได้จากแบบจำลองที่ใช้สถิติอุทกภัยย้อนหลังร่วมกับความสนใจค้นหาของเดือนนี้เอง
-                เทียบกับรูปแบบในอดีต ใช้จัดลำดับความเร่งด่วนในการเฝ้าระวัง ไม่ใช่ความน่าจะเป็นที่จะเกิดอุทกภัย
-              </p>
-            </div>
-          )}
-
-        </div>
-      </div> */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="px-6 py-5 border-b border-slate-100 bg-slate-50 flex flex-col gap-3">
@@ -1532,12 +1303,6 @@ let historyRatioText;
                 <h3 className="text-slate-800 font-bold tracking-tight leading-none text-base">
                   ข้อมูลการค้นหาจาก Google Trends เทียบกับสถานการณ์จริง
                 </h3>
-                {/* <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
-                  ตรวจจากคำค้นหาที่มีดัชนีตั้งแต่ 1 ขึ้นไป และตรงกับกฎจากข้อมูลย้อนหลัง การพบรูปแบบไม่ได้หมายถึงการค้นหาสูงผิดปกติหรือยืนยันการเกิดอุทกภัย
-                </p> */}
-                {/* <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-wider">
-                  {selectedProvince} · {thaiMonthNames[selectedMonth]} {parseInt(selectedYear) + 543}
-                </p> */}
               </div>
             </div>
 
@@ -1582,27 +1347,6 @@ let historyRatioText;
                     </p>
                   )}
                 </div>
-
-                {/* <div className="flex flex-wrap gap-2">
-                  {searchIndexList.map((item) => (
-                    <div
-                      key={item.field}
-                      className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${
-                        item.level === "High"
-                          ? "bg-sky-50 border-sky-200 text-sky-700"
-                          : "bg-slate-50 border-slate-200 text-slate-500"
-                      }`}
-                    >
-                      {item.label} {item.text}
-                    </div>
-                  ))}
-                </div> */}
-
-                {/* {undeterminedRuleCount > 0 && (
-                  <p className="m-0 text-xs text-amber-700">
-                    ข้อมูลไม่เพียงพอสำหรับตรวจสอบรูปแบบบางกฎ ({undeterminedRuleCount} กฎ)
-                  </p>
-                )} */}
               </>
             )}
           </div>
@@ -1680,9 +1424,6 @@ let historyRatioText;
                 เหตุการณ์อุทกภัยจริงที่เคยเกิดขึ้น{" "}
                 {isForecastYear ? `(อ้างอิงอดีต พ.ศ. ${REAL_DATA_YEARS[0] + 543}–${LAST_REAL_YEAR + 543})` : `(พ.ศ. ${parseInt(selectedYear) + 543})`}
               </h3>
-              {/* <p className="text-white/90 text-[11.5px] mt-1">
-                {selectedProvince} · เดือน{thaiMonthNames[selectedMonth]}
-              </p> */}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto max-h-[280px]">
@@ -1712,17 +1453,6 @@ let historyRatioText;
               </div>
             )}
           </div>
-          {/* <div className="p-5 bg-slate-50 border-t border-slate-200/80 space-y-2.5">
-            <div className="flex items-center gap-2">
-              <EmojiObjectsIcon className="text-amber-500" fontSize="small" />
-              <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
-                สรุปผล
-              </h4>
-            </div>
-            <div className="text-xs font-bold leading-relaxed">
-              {summaryBox}
-            </div>
-          </div> */}
         </div>
       </div>
     </div>

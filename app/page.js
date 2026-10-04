@@ -5,13 +5,13 @@ import { getAllForecastData } from '@/lib/data/forecast';
 import { getTodayRainfallByProvince } from '@/lib/data/live-rainfall';
 
 export default async function ForecastPage() {
-  const { forecastRows, actualRows, normalRows } = await getAllForecastData();
+  const { forecastRows, actualRows } = await getAllForecastData();
 
   // ข้อมูลฝนวันนี้มาจาก API ภายนอก ถ้าเรียกไม่ได้ให้หน้ายังแสดงส่วนอื่นได้ตามปกติ
   let todayRainfall = {};
   try {
     todayRainfall = await getTodayRainfallByProvince();
-  } catch (error) {
+  } catch {
     todayRainfall = {};
   }
 
@@ -55,7 +55,6 @@ export default async function ForecastPage() {
           initialProvince={initialProvince}
           forecastRows={forecastRows}
           actualRows={actualRows}
-          normalRows={normalRows}
           todayRainfall={todayRainfall}
         />
 

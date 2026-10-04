@@ -1,81 +1,20 @@
 import Navbar from '@/components/Navbar';
 import FloodSearchPatterns from '@/components/FloodSearchPatterns';
 
-import { getRainfallData } from '@/lib/data/rainfall';
-import { getFloodData, getFloodEventDetails } from '@/lib/data/flood';
-import { getAssociationRules } from '@/lib/data/rules';
-import { getSearchTrends } from '@/lib/data/trends';
+import { getProvincePatternData, getPatternBoundaries } from '@/lib/data/pattern';
 
-// หน้านี้ข้อมูลรวมกันใหญ่เกินขีดจำกัดของ ISR cache บน Vercel (19.07MB)
-// จึงสั่งให้ render ต่อ request แทนที่จะ pre-render เป็นหน้า static
-export const dynamic = 'force-dynamic';
+// โหลดข้อมูลเฉพาะจังหวัดเริ่มต้นตอนเปิดหน้า ส่วนจังหวัดอื่นดึงเพิ่มทีหลังตอนผู้ใช้เลือก (ผ่าน /api/pattern)
+// ทำให้ขนาดข้อมูลต่อการเข้าหน้าเล็กลงมาก จึงแคชเป็นหน้า ISR ได้ตามปกติ ไม่ต้อง force-dynamic แบบเดิม
+export const revalidate = 600;
 
-
-// สร้าง key จาก จังหวัด + ปี + เดือน
-function makeKey(item) {
-  return `${item.province}_${item.year}_${item.month}`;
-}
-
-
-// เปลี่ยน array ให้ค้นหาข้อมูลด้วย key ได้ง่าย
-function createLookup(list) {
-  const lookup = {};
-
-  for (let i = 0; i < list.length; i++) {
-    const item = list[i];
-    const key = makeKey(item);
-
-    lookup[key] = item;
-  }
-
-  return lookup;
-}
-
+const DEFAULT_PROVINCE = 'ขอนแก่น';
 
 export default async function PatternPage() {
 
-  // ดึงข้อมูลทั้งหมดพร้อมกัน
-  const [rainfallList,floodList,rulesData,trendsList,floodEventDetails,
-  ] = await Promise.all([
-    getRainfallData(),getFloodData(),getAssociationRules(),
-    getSearchTrends(),getFloodEventDetails(),
+  const [boundaries, provinceData] = await Promise.all([
+    getPatternBoundaries(),
+    getProvincePatternData(DEFAULT_PROVINCE),
   ]);
-
-
-  // เตรียมข้อมูลสำหรับค้นหาด้วย จังหวัด + ปี + เดือน
-  const floodByKey = createLookup(floodList);
-  const trendByKey = createLookup(trendsList);
-
-
-  // รวม Rainfall + Flood + Google Trends
-  const combinedData = [];
-
-  for (let i = 0; i < rainfallList.length; i++) {
-    const rain = rainfallList[i];
-    const key = makeKey(rain);
-
-    const flood = floodByKey[key] || {};
-    const trend = trendByKey[key] || {};
-
-    combinedData.push({
-      ...rain,
-
-      // ข้อมูลอุทกภัย
-      affected_people: flood.total_affected ?? null,
-      fatalities: flood.total_fatalities ?? null,
-      evacuees: flood.total_evacuees ?? null,
-      date: flood.flood_date ?? null,
-
-      // Google Trends
-      search_flood: trend.search_flood ?? null,
-      search_rain: trend.search_rain ?? null,
-      search_storm: trend.search_storm ?? null,
-      search_water_level: trend.search_water_level ?? null,
-      search_water_situation: trend.search_water_situation ?? null,
-      search_evacuate: trend.search_evacuate ?? null,
-    });
-  }
-
 
   return (
     <div className="min-h-screen">
@@ -107,9 +46,11 @@ export default async function PatternPage() {
 
 
         <FloodSearchPatterns
-          initialData={combinedData}
-          initialRules={rulesData}
-          initialFloodEvents={floodEventDetails}
+          initialProvince={DEFAULT_PROVINCE}
+          initialData={provinceData.data}
+          initialRules={provinceData.rules}
+          initialFloodEvents={provinceData.floodEvents}
+          boundaries={boundaries}
         />
 
       </div>

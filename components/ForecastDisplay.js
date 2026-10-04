@@ -6,15 +6,10 @@ import {
   CartesianGrid, ResponsiveContainer, Legend,
 } from 'recharts';
 
-import { percentOfNormal, classifyRainLevel } from '@/lib/rainlevel';
+import { FLOOD_RISK_LEVELS, classifyFloodRisk } from '@/lib/rainlevel';
 import { provinceRegions, regionOrder } from '@/lib/constants/provinces';
 import CompareRainfallDisplay from '@/components/CompareRainfallDisplay';
-import {
-  THAI_MONTHS_SHORT,
-  formatMm,
-  buildSummarySentence,
-  buildCompareChartData,
-} from '@/lib/forecast-display';
+import {THAI_MONTHS_SHORT,formatMm,buildSummarySentence,buildCompareChartData,} from '@/lib/forecast-display';
 
 const THAI_MONTHS = [
   'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -43,7 +38,7 @@ function formatThaiDate(isoDate) {
   return `${day} ${month} ${year}`;
 }
 
-export default function ForecastDisplay({ initialProvince, forecastRows, actualRows, normalRows = [], todayRainfall = {} }) {
+export default function ForecastDisplay({ initialProvince, forecastRows, actualRows, todayRainfall = {} }) {
   const [selectedProvince, setSelectedProvince] = useState(initialProvince);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCompare, setShowCompare] = useState(false);
@@ -129,32 +124,12 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     return latest;
   }, [data]);
 
-  let highlightPercent = null;
-  if (highlightForecast) {
-    highlightPercent = percentOfNormal(highlightForecast.predicted_rain, highlightForecast.baseline_mean);
-  }
-  const highlightTier = classifyRainLevel(highlightPercent);
+  const highlightTier = classifyFloodRisk(highlightForecast ? highlightForecast.predicted_rain : null);
   const highlightStyle = highlightTier.tw;
 
   const highlightMonthName = highlightForecast
     ? THAI_MONTHS[highlightForecast.month - 1]
     : null;
-
-  let highlightDiffMm = null;
-  if (highlightForecast && highlightForecast.baseline_mean != null) {
-    highlightDiffMm = Number(highlightForecast.predicted_rain) - Number(highlightForecast.baseline_mean);
-  }
-
-  const monthlyNormals = useMemo(() => {
-    const result = {};
-    for (let i = 0; i < normalRows.length; i++) {
-      const row = normalRows[i];
-      if (row.province !== selectedProvince) continue;
-      if (row.baseline_mean == null) continue;
-      result[row.month] = Number(row.baseline_mean);
-    }
-    return result;
-  }, [normalRows, selectedProvince]);
 
   let highlightRangeText = null;
   if (
@@ -171,7 +146,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       selectedProvince,
       highlightMonthName,
       highlightForecast,
-      highlightDiffMm,
       highlightRangeText,
       highlightTier
     );
@@ -463,24 +437,10 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                     <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${highlightStyle.badge}`}>
                       {highlightTier.label}
                     </span>
-                    {highlightDiffMm != null && (
-                      <span className={`text-xs font-bold ${highlightStyle.text}`}>
-                        {highlightDiffMm >= 0 ? '↑' : '↓'} {formatMm(Math.abs(highlightDiffMm))} มม. จากค่าปกติ
-                      </span>
-                    )}
                   </div>
                 </div>
 
                 <div className="flex flex-row lg:flex-col gap-6 lg:gap-5">
-                  {monthlyNormals[highlightForecast.month] != null && (
-                    <div>
-                      <p className="text-xs text-slate-500">ค่าปกติของเดือนนี้</p>
-                      <p className="text-lg font-black text-slate-800 mt-0.5">
-                        {formatMm(monthlyNormals[highlightForecast.month])}
-                        <span className="text-xs font-bold text-slate-400 ml-1">มม.</span>
-                      </p>
-                    </div>
-                  )}
                   {highlightRangeText && (
                     <div>
                       <p className="text-xs text-slate-500">ช่วงแนวโน้มปริมาณน้ำฝน</p>
@@ -513,15 +473,14 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                 {`เส้นทึบคือฝนจริง เส้นประคือค่าพยากรณ์ · ${compareList.join(' · ')}`}
               </p>
             )}
-            {/* <p className="text-xs text-slate-400 mt-0.5 mb-2">
-              เปรียบเทียบข้อมูลฝนจริงกับค่าพยากรณ์รายเดือน พร้อมช่วงที่ค่าพยากรณ์อาจคลาดเคลื่อน
-            </p> */}
-
             <ResponsiveContainer width="100%" height={320}>
               <ComposedChart data={isComparing ? compareChartData : chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} label={{ value: 'มม.', angle: -90, position: 'insideLeft', fontSize: 11 }} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                  label={{ value: 'มม.', angle: -90, position: 'insideLeft', fontSize: 11 }}
+                />
                 <Tooltip formatter={tooltipFormatter} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
 
@@ -532,7 +491,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                     dataKey="forecastRange"
                     name="ช่วงคาดการณ์"
                     stroke="none"
-                    fill="#fb923c"
+                    fill={highlightTier.hex.dot}
                     fillOpacity={0.25}
                     connectNulls={true}
                     isAnimationActive={false}
@@ -557,16 +516,42 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                     type="monotone"
                     dataKey="forecast"
                     name="ค่าแนวโน้มปริมาณน้ำฝน"
-                    stroke="#f97316"
+                    stroke={highlightTier.hex.dot}
                     strokeWidth={2.5}
                     strokeDasharray="7 4"
-                    dot={{ r: 5, fill: '#fff', stroke: '#f97316', strokeWidth: 2 }}
+                    dot={{ r: 5, fill: '#fff', stroke: highlightTier.hex.dot, strokeWidth: 2 }}
                     connectNulls={true}
                     isAnimationActive={false}
                   />
                 )}
               </ComposedChart>
             </ResponsiveContainer>
+
+            {!isComparing && (
+              <div className="mt-4 rounded-xl overflow-hidden border border-slate-200">
+                <div className="flex">
+                  {FLOOD_RISK_LEVELS.map((lvl) => (
+                    <div
+                      key={lvl.key}
+                      className="flex-1 text-center py-1.5 text-[11px] font-bold text-white"
+                      style={{ backgroundColor: lvl.hex.dot }}
+                    >
+                      {lvl.range}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex border-t border-slate-200">
+                  {FLOOD_RISK_LEVELS.map((lvl) => (
+                    <div
+                      key={lvl.key}
+                      className="flex-1 text-center py-1.5 text-[11px] font-bold text-slate-600 bg-white"
+                    >
+                      {lvl.shortLabel}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
@@ -579,16 +564,10 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                   <p className="text-xs text-slate-400">
                     ข้อมูลวันที่ {formatThaiDate(currentRain.date)} จากสถานีตรวจวัด {currentRain.stationCount} สถานี
                   </p>
-                  {/* {formatThaiDateTime(currentRain.latestTime) && (
-                    <p className="text-xs text-slate-400">
-                      อัปเดตล่าสุด {formatThaiDateTime(currentRain.latestTime)}
-                    </p>
-                  )} */}
                 </div>
 
                 {currentRain.stations && currentRain.stations.length > 0 && (
                   <div className="mt-4">
-                    {/* <label className="text-xs text-slate-500">เลือกสถานีตรวจวัด</label> */}
                     <select
                       value={selectedStation}
                       onChange={(e) => setSelectedStation(e.target.value)}
@@ -632,65 +611,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
               <p className="text-xs text-slate-400 mt-1">ยังไม่มีข้อมูลตรวจวัดวันนี้</p>
             )}
           </div>
-
-          {/* {highlightForecast && normalChartData.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-slate-800 font-bold text-sm">
-                    ปริมาณฝนตามปกติของ{data.province} ตลอดปี
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {normalHeadline}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  {monthlyNormals[highlightForecast.month] != null && (
-                    <div className="bg-slate-50 rounded-xl px-4 py-2.5">
-                      <p className="text-[11px] text-slate-500">ค่าปกติเดือน{highlightMonthName}</p>
-                      <p className="text-base font-black text-slate-800">
-                        {formatMm(monthlyNormals[highlightForecast.month])}
-                        <span className="text-[11px] font-bold text-slate-400 ml-1">มม.</span>
-                      </p>
-                    </div>
-                  )}
-                  {highlightForecast.normal_rain_days != null && (
-                    <div className="bg-slate-50 rounded-xl px-4 py-2.5">
-                      <p className="text-[11px] text-slate-500">วันฝนตกเฉลี่ย</p>
-                      <p className="text-base font-black text-slate-800">
-                        {Math.round(highlightForecast.normal_rain_days)}
-                        <span className="text-[11px] font-bold text-slate-400 ml-1">วัน/เดือน</span>
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={normalChartData} margin={{ top: 20, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={44} />
-                  <Tooltip formatter={(value) => [`${value} มม.`, 'ค่าปกติ']} />
-                  <Bar dataKey="normal" stackId="normal" fill="#bfdbfe" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                  <Bar dataKey="highlight" stackId="normal" fill="#1d4ed8" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                </BarChart>
-              </ResponsiveContainer>
-
-              <p className="text-[11px] text-slate-400 mt-3">
-                ค่าปกติปริมาณฝนรายเดือนเชิงพื้นที่ที่ใช้ในระบบ
-                {highlightForecast.normal_rain_days != null && (
-                  <>
-                    {' · '}วันฝนตกเป็นค่าเฉลี่ย พ.ศ. 2544–2563 จาก{' '}
-                    <a href="https://data.tmd.go.th/api/index1.php" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">
-                      กรมอุตุนิยมวิทยา (TMD)
-                    </a>
-                  </>
-                )}
-              </p>
-            </div>
-          )} */}
 
         </>
       )}

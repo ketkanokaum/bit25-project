@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { provinceRegions, regionOrder } from '@/lib/constants/provinces';
+import { provinceRegions } from '@/lib/constants/provinces';
 
 const RainfallMapView = dynamic(() => import('./RainfallMapView'), {
   ssr: false,

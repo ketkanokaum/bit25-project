@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import RainfallChart from './RainfallChart';
-import { percentOfNormal, classifyRainLevel, RAIN_LEVELS } from '@/lib/rainlevel';
 import { provinceRegions, regionOrder } from '@/lib/constants/provinces';
 
 function IconTune() {
@@ -32,40 +31,6 @@ const thaiMonths = [
   "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
   "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
 ];
-
-const legendItems = [];
-for (let i = 0; i < RAIN_LEVELS.length; i++) {
-  const lvl = RAIN_LEVELS[i];
-  legendItems.push({
-    label: `${lvl.label} ${lvl.range}`,
-    color: lvl.hex.color,
-    bg: lvl.hex.bg,
-    border: lvl.hex.border,
-    dot: lvl.hex.dot,
-  });
-}
-
-function getRainRiskStyleTailwind(amount, baseline) {
-  let safeBaseline;
-  if (baseline && baseline > 0) {
-    safeBaseline = baseline;
-  } else if (amount && amount > 0) {
-    safeBaseline = amount;
-  } else {
-    safeBaseline = 1;
-  }
-  const percent = percentOfNormal(amount, safeBaseline);
-  return classifyRainLevel(percent).tw;
-}
-
-function RainBar({ amount, baseline }) {
-  const style = getRainRiskStyleTailwind(amount, baseline);
-  return (
-    <span className={`inline-flex items-center justify-center min-w-[60px] px-3 py-1.5 rounded-lg border text-xs font-bold ${style.bg} ${style.text} ${style.border}`}>
-      {parseFloat(Number(amount).toFixed(1))}
-    </span>
-  );
-}
 
 function compareRows(a, b) {
   if (a.province !== b.province) return a.province.localeCompare(b.province);
@@ -219,22 +184,10 @@ export default function RainfallTable({ data = [] }) {
         <td className="px-5 py-3 font-semibold text-slate-700 text-sm group-hover:text-sky-600 transition-colors">{item.province}</td>
         <td className="px-5 py-3 text-slate-500 text-sm">{thaiMonths[item.month - 1]}</td>
         <td className="px-5 py-3 text-slate-500 text-sm">{item.year + 543}</td>
-        <td className="px-5 py-3 text-right">
-          <RainBar amount={item.average_rain} baseline={item.baseline_mean} />
+        <td className="px-5 py-3 text-right font-bold text-slate-700 text-sm">
+          {parseFloat(Number(item.average_rain).toFixed(1))}
         </td>
       </tr>
-    );
-  }
-
-  const legendBadges = [];
-  for (let i = 0; i < legendItems.length; i++) {
-    const item = legendItems[i];
-    legendBadges.push(
-      <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-transform hover:-translate-y-0.5 cursor-default"
-        style={{ backgroundColor: item.bg, borderColor: item.border }}>
-        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.dot }} />
-        <span className="text-xs font-semibold" style={{ color: item.color }}>{item.label}</span>
-      </div>
     );
   }
 
@@ -436,15 +389,6 @@ export default function RainfallTable({ data = [] }) {
           </div>
         </div>
 
-      </div>
-
-      <div className={cardCls}>
-        <div className="px-5 py-3.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-          <span className="hidden sm:block text-xs font-bold text-slate-400 uppercase tracking-wider pr-4 border-r border-slate-200">ระดับน้ำฝน</span>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {legendBadges}
-          </div>
-        </div>
       </div>
 
     </div>

@@ -105,31 +105,6 @@ function ResetViewButton({ markers }) {
   );
 }
 
-// คำอธิบายสีและขนาดหมุด แสดงตลอดเวลา ไม่ต้องแตะหมุดถึงจะเห็น
-function MapLegend() {
-  return (
-    <div className="leaflet-bottom leaflet-left">
-      <div className="leaflet-control bg-white/95 rounded-lg border border-slate-200 shadow-sm px-3 py-2 text-[11px] text-slate-600 flex flex-col gap-1.5 max-w-[220px]">
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: COLOR_TAMBON }} />
-          <span>พบพิกัดระดับตำบล</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: COLOR_DISTRICT_FALLBACK }} />
-          <span>ไม่พบพิกัดตำบล ใช้จุดกลางอำเภอแทน</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3.5 h-3.5 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: COLOR_CLUSTER }} />
-          <span>กลุ่มหมุดหลายตำบล (ซูมเข้าเพื่อแยก)</span>
-        </div>
-        <div className="pt-1 border-t border-slate-200 text-slate-400">
-          ขนาดหมุดใหญ่ขึ้นตามจำนวนหมู่ที่มีรายงาน
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function getRadius(mooCount) {
   if (mooCount >= 5) return 11;
   if (mooCount >= 3) return 9;
@@ -256,7 +231,6 @@ export default function FloodAreaMapView({ districts, province }) {
 
       <FitToMarkers markers={markers} />
       <ResetViewButton markers={markers} />
-      {/* <MapLegend /> */}
       <ZoomWatcher onZoomChange={setZoom} />
 
       {showClusters ? (
