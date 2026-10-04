@@ -486,7 +486,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
 
                 {isComparing && compareLines}
 
-                {!isComparing && (
+                {/* {!isComparing && (
                   <Area
                     dataKey="forecastRange"
                     name="ช่วงคาดการณ์"
@@ -496,7 +496,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                     connectNulls={true}
                     isAnimationActive={false}
                   />
-                )}
+                )} */}
 
                 {!isComparing && (
                   <Line
