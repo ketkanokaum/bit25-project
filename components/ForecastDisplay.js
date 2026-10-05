@@ -224,6 +224,9 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
   const highlightTier = classifyFloodRisk(highlightForecast ? highlightForecast.predicted_rain : null);
   const highlightStyle = highlightTier.tw;
 
+  // แถบสีด้านซ้ายของการ์ด ใช้สีเข้มประจำระดับความเสี่ยง จึงกำหนดเป็น inline style แทน class ของ tailwind
+  const highlightBorderStyle = { borderLeftColor: highlightTier.hex.color };
+
   let highlightMonthName = null;
   if (highlightForecast) {
     highlightMonthName = THAI_MONTHS[highlightForecast.month - 1];
@@ -549,37 +552,50 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       ) : (
         <>
           {highlightForecast && (
-            <div className={`rounded-2xl border shadow-sm p-6 ${highlightStyle.border} ${highlightStyle.bg}`}>
-              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-6 items-start">
+            <div
+              className="bg-white rounded-2xl border border-slate-200 border-l-4 shadow-sm p-8"
+              style={highlightBorderStyle}
+            >
+              <div className="flex flex-wrap items-center gap-x-10 gap-y-6">
 
                 <div>
-                  <p className="text-[14px] font-bold text-slate-500 tracking-wide">
-                    แนวโน้มปริมาณน้ำฝน
-                  </p>
-                  <p className="text-xl font-black text-slate-700 leading-tight mt-1">
-                    เดือน {highlightMonthName} {data.year + 543}
-                  </p>
-                  <p className="text-[44px] font-black text-slate-800 leading-none mt-1">
-                    {formatMm(highlightForecast.predicted_rain)}
-                    <span className="text-[18px] font-bold text-slate-400 ml-1">มม.</span>
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${highlightStyle.badge}`}>
-                      {highlightTier.label}
+                  <p className="flex items-baseline gap-2">
+                    <span className="text-[52px] font-black text-slate-900 leading-none">
+                      {formatMm(highlightForecast.predicted_rain)}
                     </span>
-                  </div>
-                  {highlightRangeText && (
-                    <div className="mt-4">
-                      <p className="text-xs text-slate-500">ช่วงแนวโน้มปริมาณน้ำฝน</p>
-                      <p className="text-lg font-black text-slate-800 mt-0.5">{highlightRangeText}</p>
-                    </div>
-                  )}
+                    <span className="text-[17px] font-bold text-slate-400">มม.</span>
+                  </p>
+                  <span className={`inline-block mt-3.5 text-[13px] font-bold px-4 py-1.5 rounded-full ${highlightStyle.badge}`}>
+                    {highlightTier.label}
+                  </span>
                 </div>
 
+                <div className="hidden lg:block w-px self-stretch bg-slate-200"></div>
+
+                <div>
+                  <p className="text-[12.5px] text-slate-400">แนวโน้มปริมาณน้ำฝน</p>
+                  <p className="text-lg font-bold text-slate-700 mt-1 whitespace-nowrap">
+                    เดือน {highlightMonthName} {data.year + 543}
+                  </p>
+                </div>
+
+                {highlightRangeText && (
+                  <div className="hidden lg:block w-px self-stretch bg-slate-200"></div>
+                )}
+                {highlightRangeText && (
+                  <div>
+                    <p className="text-[12.5px] text-slate-400">ช่วงแนวโน้มปริมาณน้ำฝน</p>
+                    <p className="text-lg font-bold text-slate-700 mt-1 whitespace-nowrap">{highlightRangeText}</p>
+                  </div>
+                )}
+
                 {highlightSummarySentence && (
-                  <div className="bg-white/70 border border-white rounded-xl p-5 h-full flex flex-col ">
-                    <p className="text-base  font-bold text-slate-600 mb-4">สรุปภาพรวม</p>
-                    <p className="text-[15px] leading-relaxed text-slate-700">
+                  <div className="hidden lg:block w-px self-stretch bg-slate-200"></div>
+                )}
+                {highlightSummarySentence && (
+                  <div className="flex-1 min-w-[300px]">
+                    <p className="text-[12.5px] font-bold text-slate-400">สรุปภาพรวม</p>
+                    <p className="text-[14.5px] leading-[1.75] text-slate-600 mt-1">
                       {highlightSummarySentence}
                     </p>
                   </div>
