@@ -441,8 +441,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     floodRiskRangeItems.push(
       <div
         key={level.key}
-        className="flex-1 text-center py-1.5 text-[11px] font-bold text-white"
-        style={{ backgroundColor: level.hex.dot }}
+        className={`flex-1 text-center py-1.5 text-[11px] font-bold ${level.tw.badge}`}
       >
         {level.range}
       </div>
