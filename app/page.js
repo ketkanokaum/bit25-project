@@ -2,18 +2,12 @@ import Navbar from '@/components/Navbar';
 import LiveClock from '@/components/LiveClock';
 import ForecastDisplay from '@/components/ForecastDisplay';
 import { getAllForecastData } from '@/lib/data/forecast';
-import { getTodayRainfallByProvince } from '@/lib/data/live-rainfall';
 
 export default async function ForecastPage() {
   const { forecastRows, actualRows } = await getAllForecastData();
 
-  // ข้อมูลฝนวันนี้มาจาก API ภายนอก ถ้าเรียกไม่ได้ให้หน้ายังแสดงส่วนอื่นได้ตามปกติ
-  let todayRainfall = {};
-  try {
-    todayRainfall = await getTodayRainfallByProvince();
-  } catch {
-    todayRainfall = {};
-  }
+  // ข้อมูลฝนวันนี้มาจาก API ภายนอกที่ตอบช้า จึงไม่ดึงตรงนี้
+  // แต่ให้ ForecastDisplay ไปเรียกเองหลังหน้าเว็บขึ้นแล้ว ผู้ใช้จะไม่ต้องรอ
 
   // กำหนดจังหวัดเริ่มต้น
   let initialProvince = null;
@@ -55,7 +49,6 @@ export default async function ForecastPage() {
           initialProvince={initialProvince}
           forecastRows={forecastRows}
           actualRows={actualRows}
-          todayRainfall={todayRainfall}
         />
 
       </div>

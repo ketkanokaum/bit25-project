@@ -135,12 +135,37 @@ function formatThaiDate(isoDate) {
   return `${day} ${month} ${year}`;
 }
 
-export default function ForecastDisplay({ initialProvince, forecastRows, actualRows, todayRainfall = {} }) {
+export default function ForecastDisplay({ initialProvince, forecastRows, actualRows }) {
   const [selectedProvince, setSelectedProvince] = useState(initialProvince);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCompare, setShowCompare] = useState(false);
   const [compareProvinces, setCompareProvinces] = useState([]);
   const [selectedStation, setSelectedStation] = useState('all');
+  const [todayRainfall, setTodayRainfall] = useState({});
+  const [loadingTodayRainfall, setLoadingTodayRainfall] = useState(true);
+
+  // ข้อมูลฝนวันนี้มาจาก API ภายนอกที่ตอบช้า จึงโหลดหลังหน้าเว็บขึ้นแล้ว
+  // ส่วนอื่นของหน้าจึงแสดงได้ทันทีโดยไม่ต้องรอ
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTodayRainfall() {
+      try {
+        const res = await fetch('/api/today-rainfall');
+        const data = await res.json();
+        if (!cancelled) setTodayRainfall(data);
+      } catch {
+        if (!cancelled) setTodayRainfall({});
+      }
+      if (!cancelled) setLoadingTodayRainfall(false);
+    }
+
+    loadTodayRainfall();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const provinces = useMemo(() => {
     const uniqueProvinces = [];
@@ -733,6 +758,8 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                   </a>
                 </p>
               </>
+            ) : loadingTodayRainfall ? (
+              <p className="text-xs text-slate-400 mt-1">กำลังโหลดข้อมูลฝนวันนี้...</p>
             ) : (
               <p className="text-xs text-slate-400 mt-1">ยังไม่มีข้อมูลตรวจวัดวันนี้</p>
             )}
