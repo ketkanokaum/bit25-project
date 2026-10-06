@@ -42,7 +42,6 @@ export default function Navbar() {
       <Link
         key={item.href}
         href={item.href}
-        prefetch={false}
         className={`px-3.5 md:px-5 py-2 rounded-full text-xs md:text-sm font-bold transition-all duration-200 whitespace-nowrap ${linkColorClasses}`}
       >
         <span className="md:hidden">{item.shortLabel}</span>
@@ -58,7 +57,6 @@ export default function Navbar() {
         
         <Link
           href="/"
-          prefetch={false}
           className="flex items-center justify-center w-9 h-9 md:w-10 md:h-10 bg-white text-sky-700 rounded-full shadow-md hover:scale-105 transition-transform"
           title="หน้าแรก"
         >

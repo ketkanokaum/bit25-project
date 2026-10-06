@@ -34,11 +34,11 @@ export default async function PatternPage() {
             </span>
 
             <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">
-              ปริมาณน้ำฝน · 2561–2569
+              Google Trends · 2563–2569
             </span>
 
-            <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">
-              Google Trends · 2563–2569
+              <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">
+              ปริมาณน้ำฝน · 2561–2569
             </span>
 
           </div>
