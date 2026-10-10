@@ -130,7 +130,7 @@ function formatThaiDate(isoDate) {
   if (parts.length !== 3) return null;
 
   const year = parseInt(parts[0]) + 543;
-  const month = THAI_MONTHS_SHORT[parseInt(parts[1]) - 1];
+  const month = THAI_MONTHS[parseInt(parts[1]) - 1];
   const day = parseInt(parts[2]);
   return `${day} ${month} ${year}`;
 }
@@ -450,12 +450,18 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     );
   }
 
+  // ใช้เดือนของผลพยากรณ์ล่าสุดเสมอ (highlightMonthName คำนวณจากเดือนสุดท้ายที่มีค่าพยากรณ์)
+  let forecastMonthYearText = "";
+  if (highlightMonthName) {
+    forecastMonthYearText = ` เดือน${highlightMonthName} พ.ศ. ${data.year + 543}`;
+  }
+
   let chartTitleText = "";
   if (data) {
     if (isComparing) {
-      chartTitleText = `เปรียบเทียบแนวโน้มปริมาณน้ำฝนระหว่างจังหวัด — ปี ${data.year + 543}`;
+      chartTitleText = `เปรียบเทียบแนวโน้มปริมาณน้ำฝนระหว่างจังหวัด${forecastMonthYearText}`;
     } else {
-      chartTitleText = `แนวโน้มปริมาณน้ำฝน ${data.province} — ปี ${data.year + 543}`;
+      chartTitleText = `แนวโน้มปริมาณน้ำฝน ${data.province}${forecastMonthYearText}`;
     }
   }
 
@@ -633,11 +639,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
             <h3 className="text-slate-800 font-bold text-sm">
               {chartTitleText}
             </h3>
-            {isComparing && (
-              <p className="text-xs text-slate-400 mt-0.5 mb-2">
-                {`เส้นทึบคือฝนจริง เส้นประคือค่าพยากรณ์ · ${compareList.join(' · ')}`}
-              </p>
-            )}
             <ResponsiveContainer width="100%" height={320}>
               <ComposedChart data={isComparing ? compareChartData : chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
