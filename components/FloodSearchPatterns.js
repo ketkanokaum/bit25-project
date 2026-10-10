@@ -858,6 +858,15 @@ if (isForecastYear) {
     rainStatusText = `${rainTier.label} (${avgRain} มม.)`;
   }
 
+  // แสดงส่วนวิเคราะห์คำค้นหาเฉพาะเดือนที่ปริมาณฝนอยู่ในระดับสูง (ตั้งแต่ 200 มม. ขึ้นไป)
+  // ใช้เกณฑ์เดียวกับที่ใช้จัดระดับโอกาสเกิดน้ำท่วมในหน้าอื่น
+  const showSearchPatternSection = isHighFloodRisk(avgRain);
+
+  let patternGridClass = "grid grid-cols-1 gap-6 items-stretch";
+  if (showSearchPatternSection) {
+    patternGridClass = "grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch";
+  }
+
   let ruleListSection;
   if (!isForecastYear) {
     if (visibleRules.length > 0) {
@@ -1470,7 +1479,8 @@ let historyRatioText;
           )}
         </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+      <div className={patternGridClass}>
+        {showSearchPatternSection && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="px-6 py-5 border-b border-slate-100 bg-slate-50 flex flex-col gap-3">
             <div className="flex items-center gap-4">
@@ -1592,6 +1602,7 @@ let historyRatioText;
             {ruleListSection}
           </div>
         </div>
+        )}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="px-6 py-5 bg-sky-700 flex items-center gap-3">
             <div className="p-1.5 bg-black/10 rounded-lg text-white flex items-center justify-center">
