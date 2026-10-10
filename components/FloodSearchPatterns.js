@@ -200,17 +200,14 @@ function isMonitoringRequired(level) {
 }
 
 const RISK_LEVELS = [
-  { tier: 1, key: "low", label: "สถานการณ์ปกติ", chanceLabel: "น้อย", range: "< 33.33%", observedRate: 7.4,
+  { key: "low", label: "สถานการณ์ปกติ",
     advice: { title: "ติดตามสถานการณ์ตามปกติ", bullets: ["ตรวจสอบพยากรณ์อากาศเป็นระยะ","ติดตามข่าวสารจากหน่วยงานในพื้นที่","ยังไม่จำเป็นต้องเตรียมการเป็นพิเศษ"] },
-    hex: { color: "#15803d", bg: "#f0fdf4", border: "#86efac", dot: "#22c55e" },
     tw: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", badge: "bg-green-100 text-green-700" } },
-  { tier: 2, key: "medium", label: "เฝ้าระวังปานกลาง", chanceLabel: "ปานกลาง", range: "33.33% – < 66.67%", observedRate: 26.2,
+  { key: "medium", label: "เฝ้าระวังปานกลาง",
     advice: { title: "เริ่มเตรียมความพร้อม", bullets: ["ติดตามสภาพอากาศและระดับน้ำอย่างสม่ำเสมอ","เตรียมยา เอกสารสำคัญ และของจำเป็น","ตรวจสอบทางระบายน้ำรอบบ้าน","วางแผนเคลื่อนย้ายทรัพย์สินหากระดับน้ำเพิ่มขึ้น"] },
-    hex: { color: "#b45309", bg: "#fffbeb", border: "#fde68a", dot: "#f59e0b" },
     tw: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", badge: "bg-amber-100 text-amber-700" } },
-  { tier: 3, key: "high", label: "เฝ้าระวังสูง", chanceLabel: "มาก", range: "≥ 66.67%", observedRate: 67.5,
+  { key: "high", label: "เฝ้าระวังสูง",
     advice: { title: "เตรียมพร้อมรับสถานการณ์", bullets: ["ติดตามประกาศเตือนภัยอย่างใกล้ชิด","เตรียมกระเป๋าฉุกเฉินและยาประจำตัว","ย้ายสิ่งของสำคัญขึ้นที่สูง","ตรวจสอบเส้นทางและจุดอพยพ","ปฏิบัติตามประกาศของหน่วยงานในพื้นที่ทันที"] },
-    hex: { color: "#b91c1c", bg: "#fef2f2", border: "#fca5a5", dot: "#ef4444" },
     tw: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", badge: "bg-red-100 text-red-700" } },
 ];
 
@@ -1483,11 +1480,6 @@ let historyRatioText;
           <ul className="m-0 flex list-none flex-col gap-1.5 pl-0">
             {adviceBulletItems}
           </ul>
-          {riskLevel.advice.note && (
-            <p className="m-0 text-xs font-semibold leading-relaxed text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-              {riskLevel.advice.note}
-            </p>
-          )}
         </div>
       )}
 

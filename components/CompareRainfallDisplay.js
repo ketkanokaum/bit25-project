@@ -126,11 +126,7 @@ export default function CompareRainfallDisplay({
         </details>
       </div>
 
-      {compareProvinces.length > 0 && (
-        <p className="text-xs text-slate-500">
-          ผลการเปรียบเทียบแสดงอยู่ในกราฟแนวโน้มปริมาณน้ำฝนด้านล่าง
-        </p>
-      )}
+    
     </div>
   );
 }
