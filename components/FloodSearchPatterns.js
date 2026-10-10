@@ -1550,7 +1550,7 @@ let historyRatioText;
               )}
 
               <p className="m-0 text-[11px] text-slate-400">
-                พิกัดตำบลจากชุดข้อมูล &ldquo;พิกัดตำบล อำเภอ จังหวัดของประเทศ&rdquo; โดยกรมการปกครอง
+                {/* พิกัดตำบลจากชุดข้อมูล &ldquo;พิกัดตำบล อำเภอ จังหวัดของประเทศ&rdquo; โดยกรมการปกครอง */}
                 เผยแพร่ผ่าน{' '}
                 <a href="https://gistdaportal.gistda.or.th/portal/home/item.html?id=a9e042bb191a43a9994e469ada3fa66e" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">
                   GISTDA
