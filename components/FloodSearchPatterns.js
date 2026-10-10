@@ -28,38 +28,16 @@ const SEARCH_FIELDS = [
 ];
 
 const SEARCH_LABELS = {
-  search_flood: "น้ำท่วม", search_rain: "ฝนตก", search_storm: "พายุ",
+  search_flood: "น้ำท่วม", search_rain: "ฝนตกหนัก", search_storm: "พายุเข้าไทย",
   search_water_level: "ระดับน้ำ", search_water_situation: "สถานการณ์น้ำ",
   search_evacuate: "อพยพ",
 };
 
-const SEARCH_HIGH_QUANTILE = 2 / 3;
-
-function yearMonthKey(year, month) {
-  return parseInt(year) * 12 + (parseInt(month) - 1);
-}
 function hasAllSearchData(row) {
   for (let i = 0; i < SEARCH_FIELDS.length; i++) {
     if (row[SEARCH_FIELDS[i]] == null) return false;
   }
   return true;
-}
-function getFieldValues(rows, field) {
-  const values = [];
-  for (let i = 0; i < rows.length; i++) values.push(Number(rows[i][field]));
-  return values;
-}
-function quantile(sortedValues, q) {
-  const n = sortedValues.length;
-  if (n === 0) return null;
-  if (n === 1) return sortedValues[0];
-  const position = (n - 1) * q;
-  const low = Math.floor(position);
-  const high = Math.ceil(position);
-  if (low === high) return sortedValues[low];
-  const lowValue = sortedValues[low];
-  const highValue = sortedValues[high];
-  return lowValue + (highValue - lowValue) * (position - low);
 }
 
 function getAllYears(lastSelectableYear) {
@@ -109,34 +87,7 @@ function getMonthRow(data, province, year, month) {
   return null;
 }
 
-const KEYWORD_NO_SEARCH = "NoSearch";
-const KEYWORD_WITHIN_THRESHOLD = "WithinThreshold";
-const KEYWORD_ABOVE_THRESHOLD = "AboveThreshold";
-const KEYWORD_NO_THRESHOLD = "NoThreshold";
-
-function collectReferenceSearchMonths(data, province) {
-  const months = new Map();
-  for (let i = 0; i < data.length; i++) {
-    const row = data[i];
-    if (row.province !== province) continue;
-    if (!REAL_DATA_YEARS.includes(parseInt(row.year))) continue;
-    if (!hasAllSearchData(row)) continue;
-    const key = yearMonthKey(row.year, row.month);
-    if (!months.has(key)) months.set(key, row);
-  }
-  return Array.from(months.values());
-}
-
-function getPositiveP67(values) {
-  const positiveValues = [];
-  for (let i = 0; i < values.length; i++) {
-    if (values[i] > 0) positiveValues.push(values[i]);
-  }
-  if (positiveValues.length === 0) return null;
-  positiveValues.sort(function (a, b) { return a - b; });
-  return quantile(positiveValues, SEARCH_HIGH_QUANTILE);
-}
-
+// ใช้เกณฑ์เดียวกับการจับคู่กฎความสัมพันธ์ คือค่าดัชนีตั้งแต่ 1 ขึ้นไปถือว่าเดือนนั้นมีการค้นหาคำนั้น
 function getSearchActivityDetail(data, province, year, month) {
   const currentRow = getMonthRow(data, province, year, month);
   if (!currentRow)
@@ -145,33 +96,15 @@ function getSearchActivityDetail(data, province, year, month) {
   if (!hasAllSearchData(currentRow))
     return null;
 
-  const referenceMonths = collectReferenceSearchMonths(data, province);
-  if (referenceMonths.length === 0)
-    return null;
-
-  const terms = [];
-  let elevatedCount = 0;
-  let noRefCount = 0;
-
+  const foundFields = [];
   for (let i = 0; i < SEARCH_FIELDS.length; i++) {
     const field = SEARCH_FIELDS[i];
-    const values = getFieldValues(referenceMonths, field);
-    const threshold = getPositiveP67(values);
-    const value = Number(currentRow[field]);
-
-    let status = KEYWORD_WITHIN_THRESHOLD;
-    if (value === 0) {
-      status = KEYWORD_NO_SEARCH;
-    } else if (threshold === null) {
-      status = KEYWORD_NO_THRESHOLD;
-      noRefCount++;
-    } else if (value > threshold) {
-      status = KEYWORD_ABOVE_THRESHOLD;
-      elevatedCount++;
+    if (Number(currentRow[field]) >= SEARCH_INDEX_MIN) {
+      foundFields.push(field);
     }
-    terms.push({ field: field, label: SEARCH_LABELS[field], value: value, threshold: threshold, status: status });
   }
-  return { terms: terms, elevatedCount: elevatedCount, noRefCount: noRefCount, hasElevatedSignal: elevatedCount > 0 };
+
+  return { foundFields: foundFields, hasSearchActivity: foundFields.length > 0 };
 }
 
 function getHistoricalLevel(floodCount) {
@@ -181,15 +114,15 @@ function getHistoricalLevel(floodCount) {
   return "high";
 }
 
-function getMonitoringLevel(floodCount, hasElevatedSignal) {
+function getMonitoringLevel(floodCount, hasSearchActivity) {
   if (floodCount == null) return null;
   if (floodCount === 0) return "low";
   if (floodCount === 1) {
-    if (hasElevatedSignal) return "medium";
+    if (hasSearchActivity) return "medium";
     return "low";
   }
   if (floodCount === 2 || floodCount === 3) {
-    if (hasElevatedSignal) return "high";
+    if (hasSearchActivity) return "high";
     return "medium";
   }
   return "high";
@@ -199,15 +132,17 @@ function isMonitoringRequired(level) {
   return level === "medium" || level === "high";
 }
 
+
 const RISK_LEVELS = [
   { key: "low", label: "สถานการณ์ปกติ",
     advice: { title: "ติดตามสถานการณ์ตามปกติ", bullets: ["ตรวจสอบพยากรณ์อากาศเป็นระยะ","ติดตามข่าวสารจากหน่วยงานในพื้นที่","ยังไม่จำเป็นต้องเตรียมการเป็นพิเศษ"] },
     tw: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", badge: "bg-green-100 text-green-700" } },
   { key: "medium", label: "เฝ้าระวังปานกลาง",
-    advice: { title: "เริ่มเตรียมความพร้อม", bullets: ["ติดตามสภาพอากาศและระดับน้ำอย่างสม่ำเสมอ","เตรียมยา เอกสารสำคัญ และของจำเป็น","ตรวจสอบทางระบายน้ำรอบบ้าน","วางแผนเคลื่อนย้ายทรัพย์สินหากระดับน้ำเพิ่มขึ้น"] },
+    advice: { title: "รับมืออุทกภัย", bullets: ["ติดตามพยากรณ์อากาศและประกาศเตือนภัย พร้อมปฏิบัติตามอย่างเคร่งครัด","จัดเตรียมสิ่งของเครื่องใช้ที่จำเป็นไว้ใช้เมื่อเกิดภัย (ถุงยังชีพ)","จัดสภาพแวดล้อมให้ปลอดภัยจากน้ำท่วม","หมั่นสังเกตสัญญาณความผิดปกติทางธรรมชาติ"] },
     tw: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", badge: "bg-amber-100 text-amber-700" } },
   { key: "high", label: "เฝ้าระวังสูง",
-    advice: { title: "เตรียมพร้อมรับสถานการณ์", bullets: ["ติดตามประกาศเตือนภัยอย่างใกล้ชิด","เตรียมกระเป๋าฉุกเฉินและยาประจำตัว","ย้ายสิ่งของสำคัญขึ้นที่สูง","ตรวจสอบเส้นทางและจุดอพยพ","ปฏิบัติตามประกาศของหน่วยงานในพื้นที่ทันที"] },
+    advice: { title: "ปฏิบัติตนปลอดภัย", bullets: ["ติดตามพยากรณ์อากาศและประกาศเตือนภัย พร้อมปฏิบัติตามอย่างเคร่งครัด","ขนย้ายสิ่งของเครื่องใช้ขึ้นที่สูง","ตัดกระแสไฟฟ้าและงดใช้เครื่องใช้ไฟฟ้าเมื่อน้ำท่วมบ้าน","ระมัดระวังภัยในช่วงน้ำท่วม อาทิ จมน้ำ สัตว์มีพิษ ไฟฟ้าดูด","หากสถานการณ์รุนแรง ให้อพยพไปตามเส้นทางที่ปลอดภัย"],
+      hotline: "แจ้งเหตุและขอความช่วยเหลือ สายด่วนนิรภัย 1784 (ตลอด 24 ชั่วโมง)" },
     tw: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", badge: "bg-red-100 text-red-700" } },
 ];
 
@@ -244,25 +179,18 @@ function predictFlood(data, province, year, month) {
       method: "climatology", label: "ระดับจากประวัติย้อนหลัง",
       assessmentType: ASSESSMENT_HISTORICAL_ONLY,
       historicalLevel: historicalLevel, monitoringLevel: null,
-      score: null, occurred: null,
       requiresMonitoring: isMonitoringRequired(historicalLevel),
-      history: history, searchDataAvailable: false, searchTerms: null,
-      elevatedCount: null, noRefCount: null, hasElevatedSignal: null,
-      searchHighTotal: SEARCH_FIELDS.length,
+      history: history,
     };
   }
 
-  const monitoringLevel = getMonitoringLevel(history.count, activity.hasElevatedSignal);
+  const monitoringLevel = getMonitoringLevel(history.count, activity.hasSearchActivity);
   return {
     method: METHOD_MODEL, label: "ระดับการเฝ้าระวังสำหรับเดือน",
     assessmentType: "historical_plus_search",
     historicalLevel: null, monitoringLevel: monitoringLevel,
-    score: null, occurred: null,
     requiresMonitoring: isMonitoringRequired(monitoringLevel),
-    history: history, searchDataAvailable: true,
-    searchTerms: activity.terms, elevatedCount: activity.elevatedCount,
-    noRefCount: activity.noRefCount, hasElevatedSignal: activity.hasElevatedSignal,
-    searchHighTotal: SEARCH_FIELDS.length, note: "",
+    history: history,
   };
 }
 
@@ -303,9 +231,9 @@ function formatCountOrDash(n) {
 function translateWord(word) {
   const dict = {
     rain_level_High: "ปริมาณฝนตั้งแต่ระดับปานกลางถึงสูง",
-    search_rain: "ค้นหา 'ฝนตก'",
+    search_rain: "ค้นหา 'ฝนตกหนัก'",
     search_flood: "ค้นหา 'น้ำท่วม'",
-    search_storm: "ค้นหา 'พายุ'",
+    search_storm: "ค้นหา 'พายุเข้าไทย'",
     search_evacuate: "ค้นหา 'อพยพ'",
     search_water_level: "ค้นหา 'ระดับน้ำ'",
     search_water_situation: "ค้นหา 'สถานการณ์น้ำ'",
@@ -1081,24 +1009,8 @@ let historyRatioText;
   function joinThaiList(parts) {
     if (parts.length === 0) return "";
     if (parts.length === 1) return parts[0];
-    if (parts.length === 2) return `${parts[0]} และ${parts[1]}`;
-    return `${parts.slice(0, -1).join(", ")} และ${parts[parts.length - 1]}`;
-  }
-
-  function ruleItemWord(item) {
-    return SEARCH_LABELS[item] ? SEARCH_LABELS[item] : item;
-  }
-
-  function selectDiverseRules(rules, maxCount) {
-    const seenConsequent = new Set();
-    const picked = [];
-    for (let i = 0; i < rules.length && picked.length < maxCount; i++) {
-      const key = asArray(rules[i].consequents).slice().sort().join(",");
-      if (seenConsequent.has(key)) continue;
-      seenConsequent.add(key);
-      picked.push(rules[i]);
-    }
-    return picked;
+    if (parts.length === 2) return `${parts[0]} และ ${parts[1]}`;
+    return `${parts.slice(0, -1).join(", ")} และ ${parts[parts.length - 1]}`;
   }
 
 
@@ -1124,8 +1036,8 @@ let historyRatioText;
 
   function searchBehaviorCategoryPhrase(category, fieldsInCategory) {
     if (category === "flood") return "น้ำท่วม";
-    if (category === "rain") return "ฝนตกในพื้นที่";
-    if (category === "storm") return "พายุ";
+    if (category === "rain") return "ฝนตกหนัก";
+    if (category === "storm") return "พายุเข้าไทย";
     if (category === "water_watch") {
       const hasLevel = fieldsInCategory.includes("search_water_level");
       const hasSituation = fieldsInCategory.includes("search_water_situation");
@@ -1249,24 +1161,17 @@ let historyRatioText;
       }
     }
 
-    if (sortedRules.length > 0) {
-      const topRule = selectDiverseRules(sortedRules, 1)[0];
-
-      const ruleTopics = [];
-      if (topRule) {
-        const ruleItems = asArray(topRule.antecedents).concat(asArray(topRule.consequents));
-        for (let i = 0; i < ruleItems.length; i++) {
-          const item = ruleItems[i];
-          const topic = item === "rain_level_High" ? "ปริมาณฝน" : `“${ruleItemWord(item)}”`;
-          if (ruleTopics.indexOf(topic) === -1) ruleTopics.push(topic);
-        }
+    // แสดงคำค้นหาที่พบในเดือนนั้นทั้งหมด (ค่าดัชนีตั้งแต่ 1 ขึ้นไป) ไม่ใช่เฉพาะคำจากกฎใดกฎหนึ่ง
+    if (targetHighFields.length > 0) {
+      const foundWords = [];
+      for (let i = 0; i < targetHighFields.length; i++) {
+        foundWords.push(`“${SEARCH_LABELS[targetHighFields[i]]}”`);
       }
 
-      let associationClause = "เมื่อพิจารณาข้อมูล Google Trends ในเดือนที่เลือก";
-      if (ruleTopics.length > 0) {
+      let associationClause = `เมื่อพิจารณาข้อมูล Google Trends ในเดือนที่เลือก พบการสืบค้นคำว่า ${joinThaiList(foundWords)}`;
+      if (sortedRules.length > 0) {
         associationClause =
-          associationClause +
-          ` พบการสืบค้นคำว่า ${joinThaiList(ruleTopics)} ซึ่งตรงกับรูปแบบความสัมพันธ์ที่ค้นพบจากการวิเคราะห์ข้อมูลย้อนหลัง`;
+          associationClause + " ซึ่งตรงกับรูปแบบความสัมพันธ์ที่ค้นพบจากการวิเคราะห์ข้อมูลย้อนหลัง";
       }
 
       summaryMethodologyText = `${summaryMethodologyText} ${associationClause}`;
@@ -1480,6 +1385,11 @@ let historyRatioText;
           <ul className="m-0 flex list-none flex-col gap-1.5 pl-0">
             {adviceBulletItems}
           </ul>
+          {riskLevel.advice.hotline && (
+            <p className="m-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[15px] font-black text-red-700">
+              {riskLevel.advice.hotline}
+            </p>
+          )}
         </div>
       )}
 
