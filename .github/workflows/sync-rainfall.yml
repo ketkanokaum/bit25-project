@@ -1,0 +1,53 @@
+name: sync-rainfall
+
+# ซิงก์ข้อมูลปริมาณน้ำฝนรายเดือนจากคลังข้อมูลเปิดของ สสน. เข้าตาราง rainfall_monthly
+#
+# ต้องตั้ง Secrets ใน GitHub ก่อนใช้งาน
+#   Settings > Secrets and variables > Actions > New repository secret
+#   DB_HOST  DB_PORT  DB_USER  DB_PASSWORD  DB_NAME  DB_SSL
+
+on:
+  schedule:
+    # ทุก 3 วัน เวลา 01:00 UTC = 08:00 น. ตามเวลาประเทศไทย
+    # ตั้งถี่กว่ารอบการอัปเดตของต้นทาง เพราะต้นทางไม่ได้ลงข้อมูลตรงวันทุกเดือน
+    # สคริปต์จะไม่เขียนอะไรถ้าข้อมูลไม่เปลี่ยน จึงรันซ้ำได้โดยไม่เสียหาย
+    - cron: '0 1 */3 * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'ตรวจอย่างเดียว ไม่เขียนฐานข้อมูล'
+        type: boolean
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: ดึงโค้ด
+        uses: actions/checkout@v4
+
+      - name: ติดตั้ง Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: ติดตั้ง dependencies
+        run: npm ci
+
+      - name: ซิงก์ข้อมูล
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_SSL: ${{ secrets.DB_SSL }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            node scripts/sync-rainfall.mjs --dry-run
+          else
+            node scripts/sync-rainfall.mjs
+          fi

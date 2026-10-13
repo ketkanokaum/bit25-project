@@ -855,7 +855,7 @@ if (isForecastYear) {
   if (avgRain == null) {
     rainStatusText = "ไม่มีข้อมูลปริมาณฝนเดือนนี้";
   } else {
-    rainStatusText = `${rainTier.label} (${avgRain} มม.)`;
+    rainStatusText = `${rainTier.label} `;
   }
 
   // แสดงส่วนวิเคราะห์คำค้นหาเฉพาะเดือนที่ปริมาณฝนอยู่ในระดับสูง (ตั้งแต่ 200 มม. ขึ้นไป)

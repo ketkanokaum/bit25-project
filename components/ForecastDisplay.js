@@ -17,6 +17,11 @@ const THAI_MONTHS = [
 
 const COMPARE_COLORS = ['#2563eb', '#f97316', '#0ea5e9', '#22c55e', '#eab308', '#ec4899'];
 
+// แสดงผลพยากรณ์ล่วงหน้ากี่เดือนนับจากเดือนสุดท้ายที่มีปริมาณน้ำฝนจริงแล้ว
+// ตารางผลพยากรณ์เก็บเดือนไว้ล่วงหน้ามากกว่านี้ได้ แต่หน้าเว็บจะแสดงเท่าที่กำหนดไว้ตรงนี้
+// เมื่อข้อมูลจริงของเดือนใหม่เข้ามา ช่วงที่แสดงจะเลื่อนไปข้างหน้าเองโดยไม่ต้องแก้อะไร
+const FORECAST_HORIZON_MONTHS = 2;
+
 const THAI_MONTHS_SHORT = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
   'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
@@ -36,7 +41,7 @@ function buildSummarySentence(province, monthName, forecastRow, rangeText, rainL
     sentence += ` ${rainLevel.label}`;
   }
 
-  sentence += ` คาดว่าจะมีปริมาณฝนประมาณ ${formatMm(forecastRow.predicted_rain)} มม.`;
+  sentence += ` คาดว่าจะมีปริมาณน้ำฝนประมาณ ${formatMm(forecastRow.predicted_rain)} มม.`;
 
   if (rangeText) {
     sentence += ` ค่าแนวโน้มปริมาณน้ำฝนอยู่ในช่วงประมาณ ${rangeText}`;
@@ -99,10 +104,13 @@ function buildCompareChartData(provinceList, forecastRows, actualRows, year) {
         }
       }
 
+      // ใช้ช่วงเดียวกับโหมดจังหวัดเดียว คือไม่เกิน FORECAST_HORIZON_MONTHS เดือนถัดจากค่าจริงล่าสุด
+      const horizonEnd = lastActualByProvince[province] + FORECAST_HORIZON_MONTHS;
+
       let forecastValue = null;
       if (month === lastActualByProvince[province] && actualValue != null) {
         forecastValue = actualValue;
-      } else if (predicted != null && month > lastActualByProvince[province]) {
+      } else if (predicted != null && month > lastActualByProvince[province] && month <= horizonEnd) {
         forecastValue = predicted;
       }
 
@@ -115,13 +123,58 @@ function buildCompareChartData(provinceList, forecastRows, actualRows, year) {
   return result;
 }
 
-function tooltipFormatter(value, name) {
-  if (name === 'ช่วงคาดการณ์') {
-    if (!Array.isArray(value)) return ['-', name];
-    return [`${value[0].toFixed(1)} – ${value[1].toFixed(1)} มม.`, name];
+// หาคีย์ของค่าจริงที่คู่กับเส้นพยากรณ์ ใช้ได้ทั้งแบบจังหวัดเดียว ('forecast')
+// และแบบเปรียบเทียบหลายจังหวัด ('ขอนแก่น_forecast')
+function actualKeyOfForecast(dataKey) {
+  if (dataKey === 'forecast' || dataKey === 'forecastRange') return 'actual';
+  if (typeof dataKey === 'string' && dataKey.endsWith('_forecast')) {
+    return dataKey.slice(0, dataKey.length - '_forecast'.length) + '_actual';
   }
-  if (value == null) return ['-', name];
-  return [`${value} มม.`, name];
+  return null;
+}
+
+function ChartTooltip({ active, payload, label }) {
+  if (!active) return null;
+  if (!payload || payload.length === 0) return null;
+
+  const items = [];
+  for (let i = 0; i < payload.length; i++) {
+    const entry = payload[i];
+    const row = entry.payload || {};
+
+    // เดือนที่มีค่าจริงแล้ว กราฟจะตั้งค่าพยากรณ์ให้เท่ากับค่าจริงเพื่อเชื่อมเส้น
+    // จึงไม่ต้องแสดงค่าพยากรณ์และช่วงคาดการณ์ซ้ำ ให้เหลือเฉพาะปริมาณฝนจริง
+    const actualKey = actualKeyOfForecast(entry.dataKey);
+    if (actualKey && row[actualKey] != null) continue;
+
+    if (entry.value == null) continue;
+
+    let text = '';
+    if (Array.isArray(entry.value)) {
+      text = `${entry.value[0].toFixed(1)} – ${entry.value[1].toFixed(1)} มม.`;
+    } else {
+      text = `${entry.value} มม.`;
+    }
+
+    items.push({
+      name: entry.name,
+      color: entry.color || entry.stroke || entry.fill,
+      text: text,
+    });
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+      <p className="mb-1 text-sm font-semibold text-slate-700">{label}</p>
+      {items.map((item, index) => (
+        <p key={index} className="text-sm" style={{ color: item.color }}>
+          {item.name} : {item.text}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 function formatThaiDate(isoDate) {
@@ -144,8 +197,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
   const [todayRainfall, setTodayRainfall] = useState({});
   const [loadingTodayRainfall, setLoadingTodayRainfall] = useState(true);
 
-  // ข้อมูลฝนวันนี้มาจาก API ภายนอกที่ตอบช้า จึงโหลดหลังหน้าเว็บขึ้นแล้ว
-  // ส่วนอื่นของหน้าจึงแสดงได้ทันทีโดยไม่ต้องรอ
   useEffect(() => {
     let cancelled = false;
 
@@ -211,21 +262,35 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
   }, [filteredProvinces, selectedProvince]);
 
   const data = useMemo(() => {
-    const myForecast = [];
+    const allForecast = [];
     for (let i = 0; i < forecastRows.length; i++) {
       if (forecastRows[i].province === selectedProvince) {
-        myForecast.push(forecastRows[i]);
+        allForecast.push(forecastRows[i]);
       }
     }
-    if (myForecast.length === 0) return null;
+    if (allForecast.length === 0) return null;
 
-    const year = myForecast[0].year;
+    const year = allForecast[0].year;
 
     const myActual = [];
+    let lastActualMonth = 0;
     for (let i = 0; i < actualRows.length; i++) {
       const row = actualRows[i];
       if (row.province === selectedProvince && row.year === year) {
         myActual.push(row);
+        if (row.month > lastActualMonth) {
+          lastActualMonth = row.month;
+        }
+      }
+    }
+
+    // เอาเฉพาะเดือนที่ยังไม่มีค่าจริง และไม่เกินช่วงที่กำหนดให้แสดง
+    // เดือนที่มีค่าจริงแล้วจะหลุดออกไปเอง และเดือนถัดไปจะเข้ามาแทนอัตโนมัติ
+    const myForecast = [];
+    for (let i = 0; i < allForecast.length; i++) {
+      const row = allForecast[i];
+      if (row.month > lastActualMonth && row.month <= lastActualMonth + FORECAST_HORIZON_MONTHS) {
+        myForecast.push(row);
       }
     }
 
@@ -249,7 +314,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
   const highlightTier = classifyFloodRisk(highlightForecast ? highlightForecast.predicted_rain : null);
   const highlightStyle = highlightTier.tw;
 
-  // แถบสีด้านซ้ายของการ์ด ใช้สีเข้มประจำระดับความเสี่ยง จึงกำหนดเป็น inline style แทน class ของ tailwind
+
   const highlightBorderStyle = { borderLeftColor: highlightTier.hex.color };
 
   let highlightMonthName = null;
@@ -647,7 +712,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                   tick={{ fontSize: 11, fill: '#94a3b8' }}
                   label={{ value: 'มม.', angle: -90, position: 'insideLeft', fontSize: 11 }}
                 />
-                <Tooltip formatter={tooltipFormatter} />
+                <Tooltip content={<ChartTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
 
                 {isComparing && compareLines}
@@ -669,7 +734,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                   <Line
                     type="monotone"
                     dataKey="actual"
-                    name="ปริมาณฝนจริง"
+                    name="ปริมาณน้ำฝน"
                     stroke="#2563eb"
                     strokeWidth={2.5}
                     dot={{ r: 4, fill: '#2563eb' }}
@@ -708,7 +773,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h3 className="text-slate-800 font-bold text-sm">
-              ฝนที่ตรวจวัดวันนี้ใน{data.province}
+              ปริมาณน้ำฝนที่ตรวจวัดวันนี้ใน{data.province}
             </h3>
             {currentRain ? (
               <>
