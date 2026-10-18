@@ -878,7 +878,7 @@ if (isForecastYear) {
       if (activeRules.length > 0) {
         emptyMessage = "ไม่พบรูปแบบที่ผ่านเกณฑ์ความสอดคล้องที่เลือกไว้";
       } else {
-        emptyMessage = "ไม่พบรูปแบบความสัมพันธ์ของคำค้นหาในเดือนนี้";
+        emptyMessage = "ไม่พบกฎความสัมพันธ์ของคำค้นหาในเดือนนี้";
       }
       ruleListSection = (
         <div className="p-8 flex flex-col items-center justify-center gap-3 text-center">
@@ -1149,7 +1149,7 @@ let historyRatioText;
       let associationClause = `เมื่อพิจารณาข้อมูล Google Trends ในเดือนที่เลือก พบการสืบค้นคำว่า ${joinThaiList(foundWords)}`;
       if (sortedRules.length > 0) {
         associationClause =
-          associationClause + " ซึ่งตรงกับรูปแบบความสัมพันธ์ที่ค้นพบจากการวิเคราะห์ข้อมูลย้อนหลัง";
+          associationClause + " ซึ่งตรงกับกฎความสัมพันธ์ที่ค้นพบจากการวิเคราะห์ข้อมูลย้อนหลัง";
       }
 
       summaryMethodologyText = `${summaryMethodologyText} ${associationClause}`;
@@ -1540,7 +1540,7 @@ let historyRatioText;
           <div className="flex flex-col gap-2 px-5 py-3 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                เกณฑ์ขั้นต่ำในการคัดกรองรูปแบบความสัมพันธ์
+                เกณฑ์ขั้นต่ำในการคัดกรองกฎความสัมพันธ์
               </label>
               <span className="text-[11px] font-bold text-slate-400">
                 {ruleCountInfo.shown}/{ruleCountInfo.total} รูปแบบ
