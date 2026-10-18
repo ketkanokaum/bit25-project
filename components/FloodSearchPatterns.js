@@ -876,7 +876,7 @@ if (isForecastYear) {
     } else {
       let emptyMessage;
       if (activeRules.length > 0) {
-        emptyMessage = "ไม่พบรูปแบบที่ผ่านเกณฑ์ความสอดคล้องที่เลือกไว้";
+        emptyMessage = "ไม่พบกฎที่ผ่านเกณฑ์ความสอดคล้องที่เลือกไว้";
       } else {
         emptyMessage = "ไม่พบกฎความสัมพันธ์ของคำค้นหาในเดือนนี้";
       }
@@ -901,7 +901,7 @@ if (isForecastYear) {
         cards.push(
           <div key={i} className="flex flex-col gap-3 p-5">
             <div className="flex flex-col gap-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">รูปแบบที่ตรงกับข้อมูลจริง</span>
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">กฎที่ตรงกับข้อมูลจริง</span>
               <div className="flex flex-wrap gap-2">
                 {antecedentTags}
               </div>
@@ -922,9 +922,9 @@ if (isForecastYear) {
     } else {
       let emptyMessage;
       if (activeRules.length > 0) {
-        emptyMessage = "ไม่พบรูปแบบที่ผ่านเกณฑ์ความสอดคล้องที่เลือกไว้";
+        emptyMessage = "ไม่พบกฎที่ผ่านเกณฑ์ความสอดคล้องที่เลือกไว้";
       } else {
-        emptyMessage = "ไม่พบรูปแบบที่ตรงกับข้อมูลจริงในเดือนนี้";
+        emptyMessage = "ไม่พบกฎที่ตรงกับข้อมูลจริงในเดือนนี้";
       }
       ruleListSection = (
         <div className="w-full min-h-[250px] p-8 flex flex-col items-center justify-center gap-3 text-center">
@@ -1543,7 +1543,7 @@ let historyRatioText;
                 เกณฑ์ขั้นต่ำในการคัดกรองกฎความสัมพันธ์
               </label>
               <span className="text-[11px] font-bold text-slate-400">
-                {ruleCountInfo.shown}/{ruleCountInfo.total} รูปแบบ
+                {ruleCountInfo.shown}/{ruleCountInfo.total} กฎ
               </span>
             </div>
             <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 transition-all focus-within:bg-white focus-within:border-sky-500 focus-within:ring-2 ring-sky-100 w-fit">
