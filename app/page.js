@@ -3,25 +3,21 @@ import LiveClock from '@/components/LiveClock';
 import ForecastDisplay from '@/components/ForecastDisplay';
 import { getAllForecastData } from '@/lib/data/forecast';
 
+export const revalidate = 600;
+
 export default async function ForecastPage() {
   const { forecastRows, actualRows } = await getAllForecastData();
 
-  // ข้อมูลฝนวันนี้มาจาก API ภายนอกที่ตอบช้า จึงไม่ดึงตรงนี้
-  // แต่ให้ ForecastDisplay ไปเรียกเองหลังหน้าเว็บขึ้นแล้ว ผู้ใช้จะไม่ต้องรอ
-
-  // กำหนดจังหวัดเริ่มต้น
   let initialProvince = null;
 
   for (let i = 0; i < forecastRows.length; i++) {
     const province = forecastRows[i].province;
 
-    // ถ้ามีขอนแก่น ให้ใช้ขอนแก่น
     if (province === 'ขอนแก่น') {
       initialProvince = 'ขอนแก่น';
       break;
     }
 
-    // ถ้ายังไม่มีจังหวัดเริ่มต้น ให้เก็บจังหวัดแรกไว้ก่อน
     if (initialProvince === null) {
       initialProvince = province;
     }

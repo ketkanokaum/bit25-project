@@ -3,8 +3,6 @@ import FloodSearchPatterns from '@/components/FloodSearchPatterns';
 
 import { getProvincePatternData, getPatternBoundaries } from '@/lib/data/pattern';
 
-// โหลดข้อมูลเฉพาะจังหวัดเริ่มต้นตอนเปิดหน้า ส่วนจังหวัดอื่นดึงเพิ่มทีหลังตอนผู้ใช้เลือก (ผ่าน /api/pattern)
-// ทำให้ขนาดข้อมูลต่อการเข้าหน้าเล็กลงมาก จึงแคชเป็นหน้า ISR ได้ตามปกติ ไม่ต้อง force-dynamic แบบเดิม
 export const revalidate = 600;
 
 const DEFAULT_PROVINCE = 'ขอนแก่น';
@@ -43,7 +41,6 @@ export default async function PatternPage() {
 
           </div>
         </div>
-
 
         <FloodSearchPatterns
           initialProvince={DEFAULT_PROVINCE}

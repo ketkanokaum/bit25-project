@@ -17,9 +17,6 @@ const THAI_MONTHS = [
 
 const COMPARE_COLORS = ['#2563eb', '#f97316', '#0ea5e9', '#22c55e', '#eab308', '#ec4899'];
 
-// แสดงผลพยากรณ์ล่วงหน้ากี่เดือนนับจากเดือนสุดท้ายที่มีปริมาณน้ำฝนจริงแล้ว
-// ตารางผลพยากรณ์เก็บเดือนไว้ล่วงหน้ามากกว่านี้ได้ แต่หน้าเว็บจะแสดงเท่าที่กำหนดไว้ตรงนี้
-// เมื่อข้อมูลจริงของเดือนใหม่เข้ามา ช่วงที่แสดงจะเลื่อนไปข้างหน้าเองโดยไม่ต้องแก้อะไร
 const FORECAST_HORIZON_MONTHS = 2;
 
 const THAI_MONTHS_SHORT = [
@@ -104,7 +101,6 @@ function buildCompareChartData(provinceList, forecastRows, actualRows, year) {
         }
       }
 
-      // ใช้ช่วงเดียวกับโหมดจังหวัดเดียว คือไม่เกิน FORECAST_HORIZON_MONTHS เดือนถัดจากค่าจริงล่าสุด
       const horizonEnd = lastActualByProvince[province] + FORECAST_HORIZON_MONTHS;
 
       let forecastValue = null;
@@ -123,8 +119,6 @@ function buildCompareChartData(provinceList, forecastRows, actualRows, year) {
   return result;
 }
 
-// หาคีย์ของค่าจริงที่คู่กับเส้นพยากรณ์ ใช้ได้ทั้งแบบจังหวัดเดียว ('forecast')
-// และแบบเปรียบเทียบหลายจังหวัด ('ขอนแก่น_forecast')
 function actualKeyOfForecast(dataKey) {
   if (dataKey === 'forecast' || dataKey === 'forecastRange') return 'actual';
   if (typeof dataKey === 'string' && dataKey.endsWith('_forecast')) {
@@ -142,8 +136,6 @@ function ChartTooltip({ active, payload, label }) {
     const entry = payload[i];
     const row = entry.payload || {};
 
-    // เดือนที่มีค่าจริงแล้ว กราฟจะตั้งค่าพยากรณ์ให้เท่ากับค่าจริงเพื่อเชื่อมเส้น
-    // จึงไม่ต้องแสดงค่าพยากรณ์และช่วงคาดการณ์ซ้ำ ให้เหลือเฉพาะปริมาณฝนจริง
     const actualKey = actualKeyOfForecast(entry.dataKey);
     if (actualKey && row[actualKey] != null) continue;
 
@@ -284,8 +276,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       }
     }
 
-    // เอาเฉพาะเดือนที่ยังไม่มีค่าจริง และไม่เกินช่วงที่กำหนดให้แสดง
-    // เดือนที่มีค่าจริงแล้วจะหลุดออกไปเอง และเดือนถัดไปจะเข้ามาแทนอัตโนมัติ
     const myForecast = [];
     for (let i = 0; i < allForecast.length; i++) {
       const row = allForecast[i];
@@ -297,7 +287,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     return { province: selectedProvince, year, actual: myActual, forecast: myForecast };
   }, [forecastRows, actualRows, selectedProvince]);
 
-  // ใช้เดือนล่าสุดที่มีผลพยากรณ์เสมอ
   const highlightForecast = useMemo(() => {
     if (!data || data.forecast.length === 0) return null;
 
@@ -313,7 +302,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
 
   const highlightTier = classifyFloodRisk(highlightForecast ? highlightForecast.predicted_rain : null);
   const highlightStyle = highlightTier.tw;
-
 
   const highlightBorderStyle = { borderLeftColor: highlightTier.hex.color };
 
@@ -347,7 +335,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
   if (provinceRainfall && provinceRainfall.stationCount > 0) {
     currentRain = provinceRainfall;
   }
-
 
   let selectedStationData = null;
   if (currentRain && selectedStation !== 'all' && currentRain.stations) {
@@ -515,7 +502,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     );
   }
 
-  // ใช้เดือนของผลพยากรณ์ล่าสุดเสมอ (highlightMonthName คำนวณจากเดือนสุดท้ายที่มีค่าพยากรณ์)
   let forecastMonthYearText = "";
   if (highlightMonthName) {
     forecastMonthYearText = ` เดือน${highlightMonthName} พ.ศ. ${data.year + 543}`;
@@ -600,7 +586,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                 value={selectedProvince}
                 onChange={(e) => {
                         setSelectedProvince(e.target.value);
-                        setSearchQuery(''); 
+                        setSearchQuery('');
                         setSelectedStation('all');
                         }}
                 className="flex-1 bg-transparent py-3 text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer w-full"

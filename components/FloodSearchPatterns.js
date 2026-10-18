@@ -87,7 +87,6 @@ function getMonthRow(data, province, year, month) {
   return null;
 }
 
-// ใช้เกณฑ์เดียวกับการจับคู่กฎความสัมพันธ์ คือค่าดัชนีตั้งแต่ 1 ขึ้นไปถือว่าเดือนนั้นมีการค้นหาคำนั้น
 function getSearchActivityDetail(data, province, year, month) {
   const currentRow = getMonthRow(data, province, year, month);
   if (!currentRow)
@@ -131,7 +130,6 @@ function getMonitoringLevel(floodCount, hasSearchActivity) {
 function isMonitoringRequired(level) {
   return level === "medium" || level === "high";
 }
-
 
 const RISK_LEVELS = [
   { key: "low", label: "สถานการณ์ปกติ",
@@ -250,8 +248,6 @@ function translateWordList(words) {
   return result;
 }
 
-// ใช้สร้างป้ายคำ (tag) หลายอัน เช่น คำค้นหาที่พบ หรือรูปแบบที่ตรงกับข้อมูลจริง
-// colorClasses คือ class สี Tailwind เช่น "bg-orange-50 text-orange-700 border-orange-100"
 function buildWordTagList(words, colorClasses) {
   const tags = [];
   for (let i = 0; i < words.length; i++) {
@@ -263,7 +259,6 @@ function buildWordTagList(words, colorClasses) {
   }
   return tags;
 }
-
 
 function hasNodeWithGroupAndId(nodes, group, rawId) {
   for (let i = 0; i < nodes.length; i++) {
@@ -285,7 +280,6 @@ function asArray(x) {
 }
 
 const SEARCH_INDEX_MIN = 1;
-
 
 function buildCurrentLevels(monthRow) {
   const levels = {};
@@ -323,7 +317,6 @@ function getItemLevel(item, levels) {
   return levels[item];
 }
 
-
 function checkRule(rule, levels) {
   const items = asArray(rule.antecedents).concat(asArray(rule.consequents));
   let hasNoData = false;
@@ -340,7 +333,6 @@ function checkRule(rule, levels) {
   if (hasNoData) return "Undetermined";
   return "Matched";
 }
-
 
 function getRulesForProvinceMonth(rules, province, month) {
   const result = [];
@@ -379,7 +371,7 @@ function filterRulesByConfidence(rules, threshold) {
   return result;
 }
 
-const EMPTY_BOUNDARIES = { searchEndYear: 0, searchEndMonth: 0, rainEndYear: 0, rainEndMonth: 0, lastSelectableYear: LAST_REAL_YEAR };
+const EMPTY_BOUNDARIES = { lastSelectableYear: LAST_REAL_YEAR };
 
 export default function FloodSearchPatterns({
   initialProvince = "ขอนแก่น",
@@ -390,8 +382,6 @@ export default function FloodSearchPatterns({
 }) {
   const [isClient, setIsClient] = useState(false);
 
-  // แคชข้อมูลรายจังหวัดไว้ในฝั่ง client เพื่อไม่ต้องยิง API ซ้ำเมื่อสลับกลับไปจังหวัดที่เคยโหลดแล้ว
-  // (เติมข้อมูลจังหวัดเริ่มต้นเข้าแคชใน useEffect ด้านล่าง ไม่อ่านค่า ref ระหว่าง render)
   const provinceCacheRef = useRef({});
   const [currentProvinceData, setCurrentProvinceData] = useState(() => ({
     data: initialData,
@@ -411,7 +401,6 @@ export default function FloodSearchPatterns({
   const [selectedYear, setSelectedYear] = useState("2026");
   const [selectedMonth, setSelectedMonth] = useState(1);
 
-  // โหลดข้อมูลของจังหวัดที่เลือกเฉพาะตอนที่ยังไม่มีอยู่ในแคช (ลดการดึงข้อมูลทุกจังหวัดพร้อมกันตั้งแต่เปิดหน้า)
   useEffect(() => {
     if (!provinceCacheRef.current[initialProvince]) {
       provinceCacheRef.current[initialProvince] = {
@@ -471,9 +460,8 @@ export default function FloodSearchPatterns({
     setSelectedYear(String(targetYear));
     setSelectedMonth(targetMonth);
     setIsClient(true);
-  }, []);
+  }, [boundaries.lastSelectableYear]);
 
-  
   const provinceOptions = useMemo(() => {
     const names = Object.keys(provinceRegions);
     const options = [];
@@ -528,7 +516,7 @@ export default function FloodSearchPatterns({
     }
     filteredYears.sort((a, b) => b - a);
     return filteredYears;
-  }, [rulesArray, data, baseYears, boundaries]);
+  }, [data, baseYears, boundaries]);
 
   const isForecastYear = !REAL_DATA_YEARS.includes(parseInt(selectedYear));
 
@@ -545,7 +533,6 @@ export default function FloodSearchPatterns({
     return buildCurrentLevels(monthRow);
   }, [monthRow]);
 
- 
   const candidateRules = useMemo(() => {
     return getRulesForProvinceMonth(rulesArray, selectedProvince, selectedMonth);
   }, [rulesArray, selectedProvince, selectedMonth]);
@@ -564,7 +551,6 @@ export default function FloodSearchPatterns({
   const graphData = useMemo(() => {
     const rulesForGraph = filterRulesByConfidence(activeRules, confidenceThreshold);
     rulesForGraph.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
-
 
     const nodesById = {};
     const nodeOrder = [];
@@ -635,7 +621,6 @@ export default function FloodSearchPatterns({
   );
   const floodHistory = prediction.history;
 
-
   const reportedAreas = useMemo(() => {
     const years = isForecastYear ? REAL_DATA_YEARS : [parseInt(selectedYear)];
     return groupReportedAreas(floodEvents, {
@@ -645,7 +630,6 @@ export default function FloodSearchPatterns({
     });
   }, [floodEvents, selectedProvince, selectedMonth, selectedYear, isForecastYear]);
 
-  
   const [selectedDistrict, setSelectedDistrict] = useState("");
   useEffect(() => {
     setSelectedDistrict("");
@@ -721,7 +705,6 @@ export default function FloodSearchPatterns({
     }
   }
 
- 
   let predictionCardTitle;
   if (isForecastYear) {
     if (prediction.method === METHOD_MODEL) {
@@ -813,7 +796,6 @@ if (isForecastYear) {
     areaCardTitle = "พื้นที่ที่ได้รับผลกระทบจากเหตุการณ์อุทกภัย";
   }
 
-
   let areaEmptyText;
   if (!reportedAreas.hasEvents) {
     areaEmptyText = isForecastYear
@@ -823,15 +805,12 @@ if (isForecastYear) {
     areaEmptyText = "มีรายงานการเกิดอุทกภัยในเดือนนี้ แต่ยังไม่มีรายละเอียดระดับพื้นที่ในชุดข้อมูล";
   }
 
-
-
   let causeLegendText;
   if (hasNodeWithGroupAndId(graphData.nodes, "cause", "rain_level_High")) {
     causeLegendText = "เกิดเหตุการณ์ฝนตกหนัก พร้อมมีการค้นหาคำเหล่านี้";
   } else {
     causeLegendText = "มีการค้นหาคำเหล่านี้";
   }
-
 
   let effectLegendText;
   if (hasNodeWithGroupAndId(graphData.nodes, "effect", "rain_level_High")) {
@@ -840,7 +819,6 @@ if (isForecastYear) {
     effectLegendText = "มักพบการค้นหาคำนี้ในเดือนเดียวกัน";
   }
 
-  
   const rainTier = avgRain != null ? classifyFloodRisk(avgRain) : null;
 
   let rainStatusBoxClass =
@@ -858,8 +836,6 @@ if (isForecastYear) {
     rainStatusText = `${rainTier.label} `;
   }
 
-  // แสดงส่วนวิเคราะห์คำค้นหาเฉพาะเดือนที่ปริมาณฝนอยู่ในระดับสูง (ตั้งแต่ 200 มม. ขึ้นไป)
-  // ใช้เกณฑ์เดียวกับที่ใช้จัดระดับโอกาสเกิดน้ำท่วมในหน้าอื่น
   const showSearchPatternSection = isHighFloodRisk(avgRain);
 
   let patternGridClass = "grid grid-cols-1 gap-6 items-stretch";
@@ -1012,15 +988,12 @@ let historyRatioText;
   historyRatioText = `เดือนเดียวกันนี้เคยเกิดอุทกภัย ${floodHistory.count} จาก ${floodHistory.total} ปี`;
 }
 
-  
-
   function joinThaiList(parts) {
     if (parts.length === 0) return "";
     if (parts.length === 1) return parts[0];
     if (parts.length === 2) return `${parts[0]} และ ${parts[1]}`;
     return `${parts.slice(0, -1).join(", ")} และ ${parts[parts.length - 1]}`;
   }
-
 
   let hasTargetSearchData = false;
   if (monthRow) {
@@ -1056,7 +1029,6 @@ let historyRatioText;
     return "การรับมือหรือการอพยพ";
   }
 
-
   function searchBehaviorPhraseList(highFields) {
     const byCategory = {};
     for (let i = 0; i < highFields.length; i++) {
@@ -1071,7 +1043,6 @@ let historyRatioText;
     }
     return phrases;
   }
-
 
   function describeSearchBehaviorSummary(highFields) {
     if (highFields.length === 0) return "";
@@ -1098,8 +1069,8 @@ let historyRatioText;
     if (matchedRealEvent) {
 
       summaryDetail =
-      
-        `${thaiMonthNames[selectedMonth]} มีรายงานการเกิดอุทกภัยใน ${selectedMonthText} 
+
+        `${thaiMonthNames[selectedMonth]} มีรายงานการเกิดอุทกภัยใน ${selectedMonthText}
         โดย${historyRatioText} ` +
         `และ${rainStatusText}`;
     } else {
@@ -1169,7 +1140,6 @@ let historyRatioText;
       }
     }
 
-    // แสดงคำค้นหาที่พบในเดือนนั้นทั้งหมด (ค่าดัชนีตั้งแต่ 1 ขึ้นไป) ไม่ใช่เฉพาะคำจากกฎใดกฎหนึ่ง
     if (targetHighFields.length > 0) {
       const foundWords = [];
       for (let i = 0; i < targetHighFields.length; i++) {
@@ -1364,7 +1334,6 @@ let historyRatioText;
         </div>
       </div>
 
-
        <div className={`p-6 rounded-2xl border-2 shadow-sm ${summaryCardClass}`}>
 
   <p className="mb-1 flex items-center gap-1.5 text-m font-bold uppercase tracking-wider text-slate-500">
@@ -1374,7 +1343,6 @@ let historyRatioText;
     />
     สรุปผล
   </p>
-
 
   {isForecastYear ? (
     <div className="mt-1 flex flex-col divide-y divide-slate-200/70">
@@ -1398,13 +1366,11 @@ let historyRatioText;
 
     </div>
   ) : (
-    /* กรณีดูข้อมูลย้อนหลัง */
     <p className="mt-2 text-[15px] font-semibold leading-relaxed text-slate-600">
       {summaryDetail}
     </p>
   )}
 </div>
-
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-100 bg-slate-50 flex items-center gap-4">
@@ -1463,7 +1429,7 @@ let historyRatioText;
               )}
 
               <p className="m-0 text-[11px] text-slate-400">
-                {/* พิกัดตำบลจากชุดข้อมูล &ldquo;พิกัดตำบล อำเภอ จังหวัดของประเทศ&rdquo; โดยกรมการปกครอง */}
+                {}
                 เผยแพร่ผ่าน{' '}
                 <a href="https://gistdaportal.gistda.or.th/portal/home/item.html?id=a9e042bb191a43a9994e469ada3fa66e" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">
                   GISTDA
@@ -1512,7 +1478,6 @@ let historyRatioText;
               </div>
             )}
           </div>
-
 
           <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-4">
             {!hasTargetSearchData ? (

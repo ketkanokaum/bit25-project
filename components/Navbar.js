@@ -53,8 +53,7 @@ export default function Navbar() {
   return (
     <div className="sticky top-4 z-50 w-full flex justify-center px-4 pointer-events-none">
       <nav className="pointer-events-auto flex items-center justify-between gap-1.5 md:gap-3 bg-sky-700/90 backdrop-blur-md p-2 rounded-full border border-sky-500/30 shadow-xl shadow-sky-950/20 max-w-fit">
-        
-        
+
         <Link
           href="/"
           className="flex items-center justify-center w-9 h-9 md:w-10 md:h-10 bg-white text-sky-700 rounded-full shadow-md hover:scale-105 transition-transform"
@@ -76,7 +75,7 @@ export default function Navbar() {
           </svg>
         </Link>
 
-        {/* รายการเมนูหลัก */}
+        {}
         <div className="flex items-center gap-1 md:gap-2">
           {navLinkItems}
         </div>

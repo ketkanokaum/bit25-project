@@ -38,7 +38,6 @@ function compareRows(a, b) {
   return a.month - b.month;
 }
 
-
 function getYears(data) {
   const years = [];
   for (let i = 0; i < data.length; i++) {

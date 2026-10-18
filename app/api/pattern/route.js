@@ -6,10 +6,14 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const province = searchParams.get('province');
 
-  if (!province || !(province in provinceRegions)) {
+  if (!province || !Object.hasOwn(provinceRegions, province)) {
     return NextResponse.json({ error: 'invalid province' }, { status: 400 });
   }
 
-  const result = await getProvincePatternData(province);
-  return NextResponse.json(result);
+  try {
+    const result = await getProvincePatternData(province);
+    return NextResponse.json(result);
+  } catch {
+    return NextResponse.json({ error: 'database unavailable' }, { status: 503 });
+  }
 }

@@ -17,8 +17,6 @@ function fail(message) {
   process.exit(1);
 }
 
-// ---------- อ่านค่าเชื่อมต่อ ----------
-
 function loadEnv() {
   const localFile = path.join(process.cwd(), '.env.local');
   if (fs.existsSync(localFile)) {
@@ -38,8 +36,6 @@ function loadEnv() {
   }
   if (missing.length > 0) fail('ขาดค่าเชื่อมต่อฐานข้อมูล: ' + missing.join(', '));
 }
-
-// ---------- ดึงข้อมูลจากต้นทาง ----------
 
 async function callApi(action, params) {
   const url = new URL(CKAN_API + '/' + action);
@@ -87,8 +83,6 @@ async function fetchAllRecords() {
   return records;
 }
 
-// ---------- แปลงข้อมูล: จับคู่ด้วยชื่อฟิลด์ ไม่ใช้ลำดับคอลัมน์ ----------
-
 function toNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
@@ -133,8 +127,6 @@ function normalize(records) {
   }
   return rows;
 }
-
-// ---------- ด่านตรวจ ----------
 
 function gateOneStructure(rows) {
   console.log('\nด่านที่ 1  ความครบถ้วนและความถูกต้องของค่า');
@@ -216,8 +208,6 @@ function gateThreeProvinces(rows, dbProvinces) {
   }
   console.log(`  ผ่าน | ${sourceList.length} จังหวัดตรงกันทั้งหมด`);
 }
-
-// ---------- เปรียบเทียบกับฐานข้อมูลแล้วเขียนเฉพาะที่ต่าง ----------
 
 function sameValue(a, b) {
   if (a === null || b === null) return a === b;

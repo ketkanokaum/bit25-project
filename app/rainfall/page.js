@@ -3,6 +3,8 @@ import RainfallTable from '@/components/RainfallTable';
 
 import { getRainfallData } from '@/lib/data/rainfall';
 
+export const revalidate = 600;
+
 export default async function RainfallPage() {
   const data = await getRainfallData();
 

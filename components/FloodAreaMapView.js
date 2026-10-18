@@ -11,25 +11,18 @@ import {
   getMarkersCenter,
 } from '@/lib/tambon-points';
 
-// ซูมน้อยกว่าค่านี้ = แสดงหมุดรวมเป็นกลุ่มระดับอำเภอ เพื่อลดความรกตอนดูภาพรวมทั้งจังหวัด
-// ซูมมากกว่าหรือเท่ากับค่านี้ = แสดงหมุดตำบลแยกทีละจุดตามจริง
 const CLUSTER_ZOOM_THRESHOLD = 12;
 
-// สีของหมุด: ใช้โทนน้ำเงินแทนแดง เพื่อไม่ให้เข้าใจผิดว่าเป็นพื้นที่กำลังน้ำท่วมอยู่ตอนนี้
-// (แดงมักถูกอ่านว่าเป็นสัญญาณอันตรายเฉพาะหน้า ทั้งที่ข้อมูลนี้คือประวัติในอดีต)
 const COLOR_TAMBON = '#2563eb';
 const COLOR_DISTRICT_FALLBACK = '#f59e0b';
 const COLOR_CLUSTER = '#1e3a8a';
 
-// MapContainer อ่านค่า center แค่ตอนสร้างครั้งแรก เปลี่ยน prop ทีหลังแผนที่จะไม่ขยับ
-// จึงต้องสั่งขยับเองทุกครั้งที่หมุดเปลี่ยน เพื่อให้แผนที่ตามจังหวัดที่เลือก
 function FitToMarkers({ markers }) {
   const map = useMap();
 
   useEffect(() => {
     if (markers.length === 0) return;
 
-    // ถ้ากล่องแผนที่เพิ่งได้ขนาดจริง Leaflet ต้องวัดใหม่ก่อน ไม่งั้นจะคำนวณกรอบผิด
     map.invalidateSize();
 
     const bounds = [];
@@ -47,7 +40,6 @@ function FitToMarkers({ markers }) {
   return null;
 }
 
-// ติดตามระดับซูมปัจจุบัน เพื่อตัดสินใจว่าจะแสดงหมุดรวมกลุ่มหรือแยกทีละตำบล
 function ZoomWatcher({ onZoomChange }) {
   const map = useMapEvents({
     zoomend: () => onZoomChange(map.getZoom()),
@@ -60,7 +52,6 @@ function ZoomWatcher({ onZoomChange }) {
   return null;
 }
 
-// นับจำนวนหมู่จากข้อความที่จัดรูปแบบไว้แล้ว เพื่อใช้กำหนดขนาดหมุด
 function countMoo(mooText) {
   if (!mooText) return 0;
   const found = mooText.match(/\d+/g);
@@ -68,7 +59,6 @@ function countMoo(mooText) {
   return found.length;
 }
 
-// แปลงปี ค.ศ. เป็น พ.ศ. แล้วต่อเป็นข้อความคั่นด้วยจุลภาค เช่น "2563, 2565"
 function buildYearsText(years) {
   const buddhistYears = [];
   for (let i = 0; i < years.length; i++) {
@@ -77,7 +67,6 @@ function buildYearsText(years) {
   return buddhistYears.join(', ');
 }
 
-// สร้างรายการ <li> จากตำบลที่หาพิกัดไม่เจอ ใช้ร่วมกันทั้งใน UnmatchedNotice และตอนไม่มีหมุดเลย
 function buildUnmatchedListItems(unmatched, districtLabel, subdistrictLabel) {
   const items = [];
   for (let i = 0; i < unmatched.length; i++) {
@@ -94,7 +83,6 @@ function buildUnmatchedListItems(unmatched, districtLabel, subdistrictLabel) {
 const ZOOM_ON_CLICK = 14;
 const ZOOM_ON_CLUSTER_CLICK = 13;
 
-// ปุ่มย้อนกลับไปดูภาพรวมทั้งจังหวัด หลังจากซูมเข้าไปดูตำบลใดตำบลหนึ่ง
 function ResetViewButton({ markers }) {
   const map = useMap();
 
@@ -128,7 +116,6 @@ function ResetViewButton({ markers }) {
   );
 }
 
-// แจ้งรายชื่อตำบลที่หาพิกัดไม่เจอเลย (ไม่มีแม้แต่จุดกลางอำเภอให้ตกไปใช้) แทนการปล่อยให้หายไปเงียบๆ
 function UnmatchedNotice({ unmatched, districtLabel, subdistrictLabel }) {
   if (!unmatched || unmatched.length === 0) return null;
 
@@ -155,7 +142,6 @@ function getRadius(mooCount) {
   return 6;
 }
 
-// รวมหมุดตำบลที่อยู่ในอำเภอเดียวกันเป็นจุดเดียว ใช้ตอนซูมออกดูภาพรวมทั้งจังหวัด
 function buildDistrictClusters(markers) {
   const byDistrict = {};
 
@@ -199,8 +185,6 @@ export default function FloodAreaMapView({ districts, province }) {
   const districtLabel = province === "กรุงเทพมหานคร" ? "เขต" : "อำเภอ";
   const subdistrictLabel = province === "กรุงเทพมหานคร" ? "แขวง" : "ตำบล";
 
-  // ใช้ useMemo เพื่อไม่ให้สร้าง markers ชุดใหม่ทุกครั้งที่ component วาดซ้ำ
-  // ถ้าสร้างใหม่ทุกรอบ effect ที่ขยับแผนที่จะทำงานไม่จบ
   const index = useMemo(() => {
     if (!points) return null;
     return buildPointIndex(points);
@@ -288,7 +272,6 @@ export default function FloodAreaMapView({ districts, province }) {
             fillOpacity: 0.8,
           }}
           eventHandlers={{
-            // แตะกลุ่มแล้วซูมเข้าไปจนแยกเห็นหมุดตำบลทีละจุด
             click: (event) => {
               event.target._map.flyTo([cluster.lat, cluster.lon], ZOOM_ON_CLUSTER_CLICK);
             },
@@ -329,7 +312,6 @@ export default function FloodAreaMapView({ districts, province }) {
             fillOpacity: 0.75,
           }}
           eventHandlers={{
-            // แตะหมุดแล้วซูมเข้าไปดูบริเวณตำบลนั้น
             click: (event) => {
               event.target._map.flyTo([marker.lat, marker.lon], ZOOM_ON_CLICK);
             },
