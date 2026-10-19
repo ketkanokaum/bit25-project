@@ -227,7 +227,7 @@ function formatCountOrDash(n) {
 
 function translateWord(word) {
   const dict = {
-    rain_level_High: "ปริมาณฝนตั้งแต่ระดับปานกลางถึงสูง",
+    rain_level_High: "ปริมาณน้ำฝนสูง (≥ 200 มม.)",
     search_rain: "ค้นหา 'ฝนตกหนัก'",
     search_flood: "ค้นหา 'น้ำท่วม'",
     search_storm: "ค้นหา 'พายุเข้าไทย'",
@@ -807,14 +807,14 @@ if (isForecastYear) {
 
   let causeLegendText;
   if (hasNodeWithGroupAndId(graphData.nodes, "cause", "rain_level_High")) {
-    causeLegendText = "เกิดเหตุการณ์ฝนตกหนัก พร้อมมีการค้นหาคำเหล่านี้";
+    causeLegendText = "มีปริมาณน้ำฝนสูง พร้อมมีการค้นหาคำเหล่านี้";
   } else {
     causeLegendText = "มีการค้นหาคำเหล่านี้";
   }
 
   let effectLegendText;
   if (hasNodeWithGroupAndId(graphData.nodes, "effect", "rain_level_High")) {
-    effectLegendText = "มักพบฝนตกหนักในเดือนเดียวกัน";
+    effectLegendText = "มักพบปริมาณน้ำฝนสูงในเดือนเดียวกัน";
   } else {
     effectLegendText = "มักพบการค้นหาคำนี้ในเดือนเดียวกัน";
   }
@@ -833,7 +833,7 @@ if (isForecastYear) {
   if (avgRain == null) {
     rainStatusText = "ไม่มีข้อมูลปริมาณฝนเดือนนี้";
   } else {
-    rainStatusText = `${rainTier.label} `;
+    rainStatusText = rainTier.label;
   }
 
   const showSearchPatternSection = isHighFloodRisk(avgRain);
@@ -1070,9 +1070,8 @@ let historyRatioText;
 
       summaryDetail =
 
-        `${thaiMonthNames[selectedMonth]} มีรายงานการเกิดอุทกภัยใน ${selectedMonthText}
-        โดย${historyRatioText} ` +
-        `และ${rainStatusText}`;
+        `${selectedMonthText} มีรายงานการเกิดอุทกภัย ` +
+        `โดย${historyRatioText} และ${rainStatusText}`;
     } else {
 
       summaryDetail =
