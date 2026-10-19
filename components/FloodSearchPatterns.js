@@ -821,14 +821,6 @@ if (isForecastYear) {
 
   const rainTier = avgRain != null ? classifyFloodRisk(avgRain) : null;
 
-  let rainStatusBoxClass =
-    "px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 ";
-  if (rainTier) {
-    rainStatusBoxClass += `${rainTier.tw.bg} ${rainTier.tw.border} ${rainTier.tw.text}`;
-  } else {
-    rainStatusBoxClass += "bg-slate-50 border-slate-200 text-slate-500";
-  }
-
   let rainStatusText;
   if (avgRain == null) {
     rainStatusText = "ไม่มีข้อมูลปริมาณฝนเดือนนี้";
@@ -843,36 +835,41 @@ if (isForecastYear) {
     patternGridClass = "grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch";
   }
 
+  function buildRuleCards() {
+    const cards = [];
+    for (let i = 0; i < visibleRules.length; i++) {
+      const rule = visibleRules[i];
+      const antecedentLabels = translateWordList(asArray(rule.antecedents));
+      const consequentLabels = translateWordList(asArray(rule.consequents));
+      const antecedentTags = buildWordTagList(antecedentLabels, "bg-orange-50 text-orange-700 border-orange-100");
+      const consequentTags = buildWordTagList(consequentLabels, "bg-sky-50 text-sky-700 border-sky-100");
+      cards.push(
+        <div key={i} className="flex flex-col gap-3 p-5">
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">กฎที่ตรงกับข้อมูลจริง</span>
+            <div className="flex flex-wrap gap-2">
+              {antecedentTags}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <ArrowBackIcon className="text-slate-300 rotate-[-90deg]" fontSize="small" />
+            <div className="flex flex-wrap gap-2">
+              {consequentTags}
+            </div>
+            <span className="text-xs font-bold text-green-600 ml-auto shrink-0">
+              {Math.round((rule.confidence || 0) * 100)}%
+            </span>
+          </div>
+        </div>
+      );
+    }
+    return cards;
+  }
+
   let ruleListSection;
   if (!isForecastYear) {
     if (visibleRules.length > 0) {
-      const cards = [];
-      for (let i = 0; i < visibleRules.length; i++) {
-        const rule = visibleRules[i];
-        const antecedentLabels = translateWordList(asArray(rule.antecedents));
-        const antecedentTags = buildWordTagList(antecedentLabels, "bg-orange-50 text-orange-700 border-orange-100");
-        cards.push(
-          <div key={i} className="flex flex-col gap-3 p-5">
-            <div className="flex flex-col gap-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">คำค้นหาที่พบ</span>
-              <div className="flex flex-wrap gap-2">
-                {antecedentTags}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <ArrowBackIcon className="text-slate-300 rotate-[-90deg]" fontSize="small" />
-              <div className={rainStatusBoxClass}>
-                <WaterDropIcon fontSize="small" />
-                {rainStatusText}
-              </div>
-              <span className="text-xs font-bold text-green-600 ml-auto shrink-0">
-                {Math.round((rule.confidence || 0) * 100)}%
-              </span>
-            </div>
-          </div>
-        );
-      }
-      ruleListSection = <div className="divide-y divide-slate-100">{cards}</div>;
+      ruleListSection = <div className="divide-y divide-slate-100">{buildRuleCards()}</div>;
     } else {
       let emptyMessage;
       if (activeRules.length > 0) {
@@ -891,34 +888,7 @@ if (isForecastYear) {
     }
   } else {
     if (visibleRules.length > 0) {
-      const cards = [];
-      for (let i = 0; i < visibleRules.length; i++) {
-        const rule = visibleRules[i];
-        const antecedentLabels = translateWordList(asArray(rule.antecedents));
-        const consequentLabels = translateWordList(asArray(rule.consequents));
-        const antecedentTags = buildWordTagList(antecedentLabels, "bg-orange-50 text-orange-700 border-orange-100");
-        const consequentTags = buildWordTagList(consequentLabels, "bg-sky-50 text-sky-700 border-sky-100");
-        cards.push(
-          <div key={i} className="flex flex-col gap-3 p-5">
-            <div className="flex flex-col gap-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">กฎที่ตรงกับข้อมูลจริง</span>
-              <div className="flex flex-wrap gap-2">
-                {antecedentTags}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <ArrowBackIcon className="text-slate-300 rotate-[-90deg]" fontSize="small" />
-              <div className="flex flex-wrap gap-2">
-                {consequentTags}
-              </div>
-              <span className="text-xs font-bold text-green-600 ml-auto shrink-0">
-                {Math.round((rule.confidence || 0) * 100)}%
-              </span>
-            </div>
-          </div>
-        );
-      }
-      ruleListSection = <div className="divide-y divide-slate-100">{cards}</div>;
+      ruleListSection = <div className="divide-y divide-slate-100">{buildRuleCards()}</div>;
     } else {
       let emptyMessage;
       if (activeRules.length > 0) {
@@ -1071,7 +1041,7 @@ let historyRatioText;
       summaryDetail =
 
         `${selectedMonthText} มีรายงานการเกิดอุทกภัย ` +
-        `โดย${historyRatioText} และ${rainStatusText}`;
+        `โดย${historyRatioText}`;
     } else {
 
       summaryDetail =
