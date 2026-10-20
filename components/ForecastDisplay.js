@@ -766,7 +766,16 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                   {floodRiskLabelItems}
                 </div>
               </div>
-            )}
+
+                  )}
+                  
+                <p className="text-[11px] text-slate-400 mt-3">
+                  อ้างอิงเกณฑ์การประเมินจาก{' '}
+                  <a href="https://esc.doae.go.th/%E0%B8%9D%E0%B8%99%E0%B8%95%E0%B8%81%E0%B9%81%E0%B8%84%E0%B9%88%E0%B9%84%E0%B8%AB%E0%B8%99%E0%B8%99%E0%B9%89%E0%B8%B3%E0%B8%96%E0%B8%B6%E0%B8%87%E0%B8%88%E0%B8%B0%E0%B8%97%E0%B9%88%E0%B8%A7%E0%B8%A1/" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">
+                    ศูน​ย์วิทย​บริการ​เพื่อ​ส่งเสริม​การเกษตร​
+
+                  </a>
+                </p>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
