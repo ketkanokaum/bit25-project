@@ -260,9 +260,16 @@ function buildWordTagList(words, colorClasses) {
   return tags;
 }
 
+const NODE_COLORS = { cause: "#F59E0B", effect: "#0EA5E9", both: "#7C3AED" };
+
+function nodeColorOf(node) {
+  return NODE_COLORS[node.group] || NODE_COLORS.effect;
+}
+
 function hasNodeWithGroupAndId(nodes, group, rawId) {
   for (let i = 0; i < nodes.length; i++) {
-    if (nodes[i].group === group && nodes[i].rawId === rawId) return true;
+    if (nodes[i].rawId !== rawId) continue;
+    if (nodes[i].group === group || nodes[i].group === "both") return true;
   }
   return false;
 }
@@ -548,6 +555,8 @@ export default function FloodSearchPatterns({
     shown: visibleRules.length,
   };
 
+  const graphRef = useRef(null);
+
   const graphData = useMemo(() => {
     const rulesForGraph = filterRulesByConfidence(activeRules, confidenceThreshold);
     rulesForGraph.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
@@ -567,18 +576,24 @@ export default function FloodSearchPatterns({
       const antecedents = asArray(rule.antecedents);
       const consequents = asArray(rule.consequents);
       for (let j = 0; j < antecedents.length; j++) {
-        const antId = `cause:${antecedents[j]}`;
+        const antId = antecedents[j];
         if (!nodesById[antId]) {
-          nodesById[antId] = { id: antId, label: translateWord(antecedents[j]), rawId: antecedents[j], group: "cause", val: 3 };
+          nodesById[antId] = { id: antId, label: translateWord(antId), rawId: antId, group: "cause", val: 3 };
           nodeOrder.push(antId);
+        } else if (nodesById[antId].group === "effect") {
+          nodesById[antId].group = "both";
         }
         for (let k = 0; k < consequents.length; k++) {
-          const conId = `effect:${consequents[k]}`;
+          const conId = consequents[k];
           if (!nodesById[conId]) {
-            nodesById[conId] = { id: conId, label: translateWord(consequents[k]), rawId: consequents[k], group: "effect", val: 3 };
+            nodesById[conId] = { id: conId, label: translateWord(conId), rawId: conId, group: "effect", val: 3 };
             nodeOrder.push(conId);
+          } else if (nodesById[conId].group === "cause") {
+            nodesById[conId].group = "both";
           }
-          links.push({ source: antId, target: conId });
+          if (antId !== conId) {
+            links.push({ source: antId, target: conId });
+          }
         }
       }
     }
@@ -589,6 +604,20 @@ export default function FloodSearchPatterns({
     }
     return { nodes, links };
   }, [activeRules, confidenceThreshold]);
+
+  useEffect(() => {
+    const fg = graphRef.current;
+    if (!fg || typeof fg.d3Force !== "function") return;
+
+    const charge = fg.d3Force("charge");
+    if (charge) charge.strength(-320);
+
+    const link = fg.d3Force("link");
+    if (link) link.distance(110);
+
+    if (typeof fg.d3ReheatSimulation === "function") fg.d3ReheatSimulation();
+  }, [graphData]);
+
 
   const realEvents = useMemo(() => {
     let years;
@@ -803,6 +832,14 @@ if (isForecastYear) {
       : `ไม่พบรายงานการเกิดอุทกภัยในเดือน${thaiMonthNames[selectedMonth]} พ.ศ. ${parseInt(selectedYear) + 543}`;
   } else {
     areaEmptyText = "มีรายงานการเกิดอุทกภัยในเดือนนี้ แต่ยังไม่มีรายละเอียดระดับพื้นที่ในชุดข้อมูล";
+  }
+
+  let hasBothRoleNode = false;
+  for (let i = 0; i < graphData.nodes.length; i++) {
+    if (graphData.nodes[i].group === "both") {
+      hasBothRoleNode = true;
+      break;
+    }
   }
 
   let causeLegendText;
@@ -1444,6 +1481,15 @@ let historyRatioText;
                     {effectLegendText}
                   </span>
                 </div>
+
+                {hasBothRoleNode && (
+                  <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
+                    <div className="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse" />
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-tight">
+                      พบร่วมกันทั้งสองด้านในคนละกฎ
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1474,31 +1520,47 @@ let historyRatioText;
           </div>
 
           {graphData.nodes.length > 0 && (
-            <div className="border-b border-slate-100 h-[260px] bg-[#fafcff] flex justify-center items-center relative overflow-hidden">
+            <div className="border-b border-slate-100 h-[340px] bg-[#fafcff] flex justify-center items-center relative overflow-hidden">
               <div className="cursor-grab active:cursor-grabbing w-full flex justify-center items-center">
                 <ForceGraph2D
+                  ref={graphRef}
                   graphData={graphData}
-                  nodeColor={(node) => {
-                    if (node.group === "cause") return "#F59E0B";
-                    return "#0EA5E9";
-                  }}
+                  nodeColor={nodeColorOf}
                   nodeVal="val"
                   linkDirectionalParticles={2}
-                  height={260}
+                  linkDirectionalArrowLength={4}
+                  linkDirectionalArrowRelPos={0.92}
+                  linkColor={() => "#CBD5E1"}
+                  height={340}
+                  onEngineStop={() => {
+                    const fg = graphRef.current;
+                    if (fg && typeof fg.zoomToFit === "function") fg.zoomToFit(400, 55);
+                  }}
                   nodeCanvasObject={(node, ctx, globalScale) => {
                     const label = node.label;
-                    const fontSize = 14 / globalScale;
+                    const fontSize = 12 / globalScale;
                     ctx.font = `${fontSize}px Arial`;
                     ctx.textAlign = "center";
+
+                    const padX = 4 / globalScale;
+                    const padY = 2.5 / globalScale;
+                    const textWidth = ctx.measureText(label).width;
+                    const boxY = node.y + 12 - fontSize * 0.8;
+                    ctx.fillStyle = "rgba(250,252,255,0.88)";
+                    ctx.fillRect(
+                      node.x - textWidth / 2 - padX,
+                      boxY,
+                      textWidth + padX * 2,
+                      fontSize + padY * 2
+                    );
+
+                    ctx.textBaseline = "top";
                     ctx.fillStyle = "#334155";
-                    ctx.fillText(label, node.x, node.y + 12);
+                    ctx.fillText(label, node.x, boxY + padY);
+                    ctx.textBaseline = "alphabetic";
                     ctx.beginPath();
                     ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI, false);
-                    if (node.group === "cause") {
-                      ctx.fillStyle = "#F59E0B";
-                    } else {
-                      ctx.fillStyle = "#0EA5E9";
-                    }
+                    ctx.fillStyle = nodeColorOf(node);
                     ctx.fill();
                   }}
                 />
