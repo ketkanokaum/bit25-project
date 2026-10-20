@@ -260,7 +260,7 @@ function buildWordTagList(words, colorClasses) {
   return tags;
 }
 
-const NODE_COLORS = { cause: "#F59E0B", effect: "#0EA5E9", both: "#F59E0B" };
+const NODE_COLORS = { cause: "#F59E0B", effect: "#0EA5E9" };
 
 function nodeColorOf(node) {
   return NODE_COLORS[node.group] || NODE_COLORS.effect;
@@ -557,53 +557,73 @@ export default function FloodSearchPatterns({
 
   const graphRef = useRef(null);
 
-  const graphData = useMemo(() => {
-    const rulesForGraph = filterRulesByConfidence(activeRules, confidenceThreshold);
-    rulesForGraph.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+const graphData = useMemo(() => {
+  // 1. กรองกฎตาม Confidence Threshold
+  const rulesForGraph = filterRulesByConfidence(activeRules, confidenceThreshold);
 
-    const nodesById = {};
-    const nodeOrder = [];
-    const links = [];
-    let maxRules;
-    if (rulesForGraph.length > 15) {
-      maxRules = 15;
-    } else {
-      maxRules = rulesForGraph.length;
+  // 2. เรียงลำดับกฎตาม Confidence จากมากไปน้อย
+  rulesForGraph.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+
+  // 3. ยุบรวมกฎที่เป็นคู่สลับทิศทางกัน (เอาตัวที่มี Confidence สูงสุดตัวแรกที่เจอเนื่องจาก Sort ไว้แล้ว)
+  const uniqueRules = [];
+  const seenPairs = new Set();
+
+  for (let i = 0; i < rulesForGraph.length; i++) {
+    const rule = rulesForGraph[i];
+    const antecedents = asArray(rule.antecedents).sort(); // sort เพื่อสร้าง Key ที่แน่นอน
+    const consequents = asArray(rule.consequents).sort();
+
+    // สร้าง Unique Pair Key เช่น "search_evacuate|search_flood"
+    // ไม่ว่าจะเป็น (A -> B) หรือ (B -> A) กฎคู่นี้จะได้ pairKey เดียวกันเสมอ
+    const pairKey = [...antecedents, ...consequents].sort().join("|");
+
+    if (!seenPairs.has(pairKey)) {
+      seenPairs.add(pairKey);
+      uniqueRules.push(rule);
     }
+  }
 
-    for (let i = 0; i < maxRules; i++) {
-      const rule = rulesForGraph[i];
-      const antecedents = asArray(rule.antecedents);
-      const consequents = asArray(rule.consequents);
-      for (let j = 0; j < antecedents.length; j++) {
-        const antId = antecedents[j];
-        if (!nodesById[antId]) {
-          nodesById[antId] = { id: antId, label: translateWord(antId), rawId: antId, group: "cause", val: 3 };
-          nodeOrder.push(antId);
-        } else if (nodesById[antId].group === "effect") {
-          nodesById[antId].group = "both";
+  // 4. เลือกกฎที่มี Confidence สูงสุดมาแสดงไม่เกิน 5 กฎ (Top 5)
+  const top5Rules = uniqueRules.slice(0, 5);
+
+  // 5. นำ top5Rules มาสร้าง Nodes และ Links
+  const nodesById = {};
+  const nodeOrder = [];
+  const links = [];
+
+  for (let i = 0; i < top5Rules.length; i++) {
+    const rule = top5Rules[i];
+    const antecedents = asArray(rule.antecedents);
+    const consequents = asArray(rule.consequents);
+
+    for (let j = 0; j < antecedents.length; j++) {
+      const antId = antecedents[j];
+      if (!nodesById[antId]) {
+        nodesById[antId] = { id: antId, label: translateWord(antId), rawId: antId, group: "cause", val: 3 };
+        nodeOrder.push(antId);
+      }
+
+      for (let k = 0; k < consequents.length; k++) {
+        const conId = consequents[k];
+        if (!nodesById[conId]) {
+          nodesById[conId] = { id: conId, label: translateWord(conId), rawId: conId, group: "effect", val: 3 };
+          nodeOrder.push(conId);
         }
-        for (let k = 0; k < consequents.length; k++) {
-          const conId = consequents[k];
-          if (!nodesById[conId]) {
-            nodesById[conId] = { id: conId, label: translateWord(conId), rawId: conId, group: "effect", val: 3 };
-            nodeOrder.push(conId);
-          } else if (nodesById[conId].group === "cause") {
-            nodesById[conId].group = "both";
-          }
-          if (antId !== conId) {
-            links.push({ source: antId, target: conId });
-          }
+
+        if (antId !== conId) {
+          links.push({ source: antId, target: conId });
         }
       }
     }
+  }
 
-    const nodes = [];
-    for (let i = 0; i < nodeOrder.length; i++) {
-      nodes.push(nodesById[nodeOrder[i]]);
-    }
-    return { nodes, links };
-  }, [activeRules, confidenceThreshold]);
+  const nodes = [];
+  for (let i = 0; i < nodeOrder.length; i++) {
+    nodes.push(nodesById[nodeOrder[i]]);
+  }
+
+  return { nodes, links };
+}, [activeRules, confidenceThreshold]);
 
   useEffect(() => {
     const fg = graphRef.current;
@@ -855,8 +875,14 @@ if (isForecastYear) {
   } else {
     rainStatusText = rainTier.label;
   }
+  const targetHighFields = [];
+  for (let i = 0; i < SEARCH_FIELDS.length; i++) {
+    if (currentLevels[SEARCH_FIELDS[i]] === "High") {
+      targetHighFields.push(SEARCH_FIELDS[i]);
+    }
+  }
 
-  const showSearchPatternSection = activeRules.length > 0;
+const showSearchPatternSection = activeRules.length > 0 || targetHighFields.length > 0;
 
   let patternGridClass = "grid grid-cols-1 gap-6 items-stretch";
   if (showSearchPatternSection) {
@@ -1048,12 +1074,7 @@ let historyRatioText;
     return `เดือนนี้มีการค้นหาเกี่ยวกับ${joinThaiList(phrases)}`;
   }
 
-  const targetHighFields = [];
-  for (let i = 0; i < SEARCH_FIELDS.length; i++) {
-    if (currentLevels[SEARCH_FIELDS[i]] === "High") {
-      targetHighFields.push(SEARCH_FIELDS[i]);
-    }
-  }
+
   const searchBehaviorSummaryText = describeSearchBehaviorSummary(targetHighFields);
 
   const summaryCardClass = "bg-sky-50 border-sky-200";
