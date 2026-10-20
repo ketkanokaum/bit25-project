@@ -260,7 +260,7 @@ function buildWordTagList(words, colorClasses) {
   return tags;
 }
 
-const NODE_COLORS = { cause: "#F59E0B", effect: "#0EA5E9", both: "#7C3AED" };
+const NODE_COLORS = { cause: "#F59E0B", effect: "#0EA5E9", both: "#F59E0B" };
 
 function nodeColorOf(node) {
   return NODE_COLORS[node.group] || NODE_COLORS.effect;
@@ -832,14 +832,6 @@ if (isForecastYear) {
       : `ไม่พบรายงานการเกิดอุทกภัยในเดือน${thaiMonthNames[selectedMonth]} พ.ศ. ${parseInt(selectedYear) + 543}`;
   } else {
     areaEmptyText = "มีรายงานการเกิดอุทกภัยในเดือนนี้ แต่ยังไม่มีรายละเอียดระดับพื้นที่ในชุดข้อมูล";
-  }
-
-  let hasBothRoleNode = false;
-  for (let i = 0; i < graphData.nodes.length; i++) {
-    if (graphData.nodes[i].group === "both") {
-      hasBothRoleNode = true;
-      break;
-    }
   }
 
   let causeLegendText;
@@ -1481,15 +1473,6 @@ let historyRatioText;
                     {effectLegendText}
                   </span>
                 </div>
-
-                {hasBothRoleNode && (
-                  <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
-                    <div className="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse" />
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-tight">
-                      พบร่วมกันทั้งสองด้านในคนละกฎ
-                    </span>
-                  </div>
-                )}
               </div>
             )}
           </div>
