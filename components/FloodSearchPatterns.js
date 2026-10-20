@@ -857,7 +857,7 @@ if (isForecastYear) {
     rainStatusText = rainTier.label;
   }
 
-  const showSearchPatternSection = isHighFloodRisk(avgRain);
+  const showSearchPatternSection = activeRules.length > 0;
 
   let patternGridClass = "grid grid-cols-1 gap-6 items-stretch";
   if (showSearchPatternSection) {
