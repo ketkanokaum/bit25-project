@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ทดสอบแบบจำลองพยากรณ์ปริมาณน้ำฝน</title>
+<style>
+  body{font-family:system-ui,"Helvetica Neue",sans-serif;margin:0;padding:32px 16px;background:#f8fafc;color:#1e293b}
+  .box{max-width:720px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px}
+  h1{font-size:20px;margin:0 0 4px}
+  p.sub{color:#64748b;font-size:14px;margin:0 0 20px}
+  label{display:block;font-size:13px;font-weight:700;color:#475569;margin:14px 0 6px}
+  select,input{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:9px;font-size:15px;background:#fff}
+  button{margin-top:18px;width:100%;padding:12px;border:0;border-radius:9px;background:#1e3a8a;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+  table{width:100%;border-collapse:collapse;margin-top:20px;font-size:14px}
+  th,td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{background:#f1f5f9;color:#475569;font-size:12px;text-transform:uppercase}
+  .meta{margin-top:14px;font-size:12px;color:#94a3b8}
+  .err{margin-top:16px;color:#b91c1c;font-weight:700}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>แบบจำลองพยากรณ์ปริมาณน้ำฝนรายจังหวัด</h1>
+  <p class="sub">Random Forest · เรียกแบบจำลองจากไฟล์ rf_rainfall_model.pkl.gz โดยตรง</p>
+
+  <label for="province">จังหวัด</label>
+  <select id="province"></select>
+
+  <label for="last">เดือนล่าสุดที่มีข้อมูลจริง (1–12)</label>
+  <input id="last" type="number" min="1" max="12" value="9">
+
+  <button id="go">พยากรณ์ 3 เดือนถัดไป</button>
+
+  <div id="out"></div>
+</div>
+
+<script>
+const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                     'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+async function loadProvinces() {
+  const res = await fetch('/provinces');
+  const data = await res.json();
+  const sel = document.getElementById('province');
+  for (const p of data.provinces) {
+    const o = document.createElement('option');
+    o.value = p; o.textContent = p;
+    if (p === 'ขอนแก่น') o.selected = true;
+    sel.appendChild(o);
+  }
+}
+
+async function predict() {
+  const out = document.getElementById('out');
+  out.innerHTML = 'กำลังพยากรณ์...';
+  const res = await fetch('/predict', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      province: document.getElementById('province').value,
+      last_actual_month: Number(document.getElementById('last').value),
+    }),
+  });
+  const data = await res.json();
+  if (data.error) { out.innerHTML = '<p class="err">' + data.error + '</p>'; return; }
+
+  let rows = '';
+  for (const r of data.forecast) {
+    rows += '<tr><td>' + THAI_MONTHS[r.month - 1] + '</td><td>' + r.predicted_rain.toFixed(2)
+          + '</td><td>' + r.predicted_rain_lower.toFixed(2)
+          + '</td><td>' + r.predicted_rain_upper.toFixed(2) + '</td></tr>';
+  }
+  out.innerHTML =
+    '<table><tr><th>เดือน</th><th>ค่าพยากรณ์ (มม.)</th><th>ขอบล่าง</th><th>ขอบบน</th></tr>'
+    + rows + '</table>'
+    + '<p class="meta">' + data.province + ' · ' + data.region
+    + ' · ฝึกสอนด้วยข้อมูล ' + data.train_start + ' ถึง ' + data.train_end + '</p>';
+}
+
+document.getElementById('go').addEventListener('click', predict);
+loadProvinces();
+</script>
+</body>
+</html>
