@@ -6,10 +6,10 @@ from pathlib import Path
 
 app = Flask(__name__)
 
-MODEL_PATH = Path("rf_rainfall_model.pkl")  # <- วางไฟล์แบบจำลองไว้โฟลเดอร์เดียวกับ app.py
+MODEL_PATH = Path("rf_rainfall_model.pkl")  
 FORECAST_MONTHS = 3
 
-# โหลดแบบจำลองครั้งเดียวตอนเริ่มรัน
+
 with open(MODEL_PATH, "rb") as f:
     bundle = pickle.load(f)
 
@@ -22,17 +22,15 @@ print("ฝึกสอนด้วยข้อมูล", bundle["train_start"],
 
 
 def forecast_province(province, months):
-    """พยากรณ์ปริมาณน้ำฝนของจังหวัดเดียว พร้อมช่วงค่าบนล่าง"""
     model = models[province]
 
     X = pd.DataFrame({"month": months})
-    # ถ้าแบบจำลองมี feature_names_in_ จะจัดคอลัมน์ให้ตรง
+
     if hasattr(model, "feature_names_in_"):
         X = X[list(model.feature_names_in_)]
 
     predicted = model.predict(X)
 
-    # ช่วงค่าพยากรณ์คิดจากผลของต้นไม้ทุกต้นในป่า
     tree_predictions = np.array([
         tree.predict(X.to_numpy()) for tree in model.estimators_
     ])
@@ -64,7 +62,7 @@ def provinces():
 def predict():
     data = request.get_json(force=True)
 
-    # รับค่าจากหน้าเว็บ
+    
     province = str(data.get("province", "")).strip()
     months = data.get("months")
 
