@@ -91,5 +91,45 @@ def predict():
     })
 
 
+@app.post("/forecast-all")
+def forecast_all():
+    data = request.get_json(force=True)
+
+    last_year = int(data.get("last_actual_year", 0))
+    last_month = int(data.get("last_actual_month", 0))
+
+    if last_year < 2000 or last_month < 1 or last_month > 12:
+        return jsonify({"error": "ต้องระบุ last_actual_year และ last_actual_month"}), 400
+
+    periods = []
+    index = last_year * 12 + last_month
+    for step in range(1, FORECAST_MONTHS + 1):
+        nxt = index + step
+        periods.append(((nxt - 1) // 12, (nxt - 1) % 12 + 1))
+
+    months = [month for _, month in periods]
+    rows = []
+
+    for province in sorted(models.keys()):
+        values = forecast_province(province, months)
+        for i, (year, month) in enumerate(periods):
+            rows.append({
+                "province": province,
+                "year": year,
+                "month": month,
+                "horizon_months": i + 1,
+                "predicted_rain": values[i]["predicted_rain"],
+                "predicted_rain_lower": values[i]["predicted_rain_lower"],
+                "predicted_rain_upper": values[i]["predicted_rain_upper"],
+            })
+
+    return jsonify({
+        "train_start": bundle["train_start"],
+        "train_end": bundle["train_end"],
+        "count": len(rows),
+        "forecast": rows,
+    })
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)
