@@ -618,7 +618,6 @@ export default function FloodSearchPatterns({
     if (typeof fg.d3ReheatSimulation === "function") fg.d3ReheatSimulation();
   }, [graphData]);
 
-
   const realEvents = useMemo(() => {
     let years;
     if (isForecastYear) {

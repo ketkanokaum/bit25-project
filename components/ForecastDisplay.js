@@ -48,20 +48,7 @@ function buildSummarySentence(province, monthName, forecastRow, rangeText, rainL
 }
 
 function buildCompareChartData(provinceList, forecastRows, actualRows, year) {
-  let lastMonth = 0;
-  for (let i = 0; i < forecastRows.length; i++) {
-    const row = forecastRows[i];
-    if (provinceList.includes(row.province) && row.month > lastMonth) {
-      lastMonth = row.month;
-    }
-  }
-  for (let i = 0; i < actualRows.length; i++) {
-    const row = actualRows[i];
-    if (provinceList.includes(row.province) && row.year === year && row.month > lastMonth) {
-      lastMonth = row.month;
-    }
-  }
-  if (lastMonth === 0) return [];
+  const positionOf = (row) => row.year * 12 + row.month - year * 12;
 
   const lastActualByProvince = {};
   for (let p = 0; p < provinceList.length; p++) {
@@ -69,16 +56,23 @@ function buildCompareChartData(provinceList, forecastRows, actualRows, year) {
     let last = 0;
     for (let i = 0; i < actualRows.length; i++) {
       const row = actualRows[i];
-      if (row.province === province && row.year === year && row.month > last) {
-        last = row.month;
-      }
+      if (row.province !== province) continue;
+      const position = positionOf(row);
+      if (position > last) last = position;
     }
     lastActualByProvince[province] = last;
   }
 
+  let lastMonth = 0;
+  for (let p = 0; p < provinceList.length; p++) {
+    const end = lastActualByProvince[provinceList[p]] + FORECAST_HORIZON_MONTHS;
+    if (end > lastMonth) lastMonth = end;
+  }
+  if (lastMonth === 0) return [];
+
   const result = [];
   for (let month = 1; month <= lastMonth; month++) {
-    const point = { month: month, label: THAI_MONTHS_SHORT[month - 1] };
+    const point = { month: month, label: THAI_MONTHS_SHORT[(month - 1) % 12] };
 
     for (let p = 0; p < provinceList.length; p++) {
       const province = provinceList[p];
@@ -86,7 +80,7 @@ function buildCompareChartData(provinceList, forecastRows, actualRows, year) {
       let actualValue = null;
       for (let i = 0; i < actualRows.length; i++) {
         const row = actualRows[i];
-        if (row.province === province && row.year === year && row.month === month) {
+        if (row.province === province && positionOf(row) === month) {
           actualValue = Number(row.average_rain);
           break;
         }
@@ -95,7 +89,7 @@ function buildCompareChartData(provinceList, forecastRows, actualRows, year) {
       let predicted = null;
       for (let i = 0; i < forecastRows.length; i++) {
         const row = forecastRows[i];
-        if (row.province === province && row.month === month) {
+        if (row.province === province && positionOf(row) === month) {
           predicted = Number(row.predicted_rain);
           break;
         }
@@ -262,7 +256,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     }
     if (allForecast.length === 0) return null;
 
-    // นับเดือนแบบต่อเนื่องข้ามปี เพื่อให้เทียบเดือนธันวาคมกับมกราคมปีถัดไปได้ถูกต้อง
     let lastActualIndex = 0;
     for (let i = 0; i < actualRows.length; i++) {
       const row = actualRows[i];
@@ -271,7 +264,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       if (index > lastActualIndex) lastActualIndex = index;
     }
 
-    // ถ้ายังไม่มีข้อมูลจริงเลย ให้ยึดเดือนก่อนหน้าค่าพยากรณ์แรกเป็นจุดเริ่ม
     if (lastActualIndex === 0) {
       let firstForecastIndex = allForecast[0].year * 12 + allForecast[0].month;
       for (let i = 1; i < allForecast.length; i++) {
@@ -410,8 +402,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     let lastActualMonth = 0;
     let lastMonth = 0;
 
-    // ตำแหน่งบนแกนนอน นับต่อจากเดือนมกราคมของปีที่แสดง
-    // เดือนของปีถัดไปจึงได้ตำแหน่ง 13 และ 14 ทำให้วาดต่อเนื่องข้ามปีได้
     const positionOf = (row) => row.year * 12 + row.month - data.year * 12;
 
     for (let i = 0; i < data.actual.length; i++) {
