@@ -262,24 +262,40 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     }
     if (allForecast.length === 0) return null;
 
-    const year = allForecast[0].year;
+    // นับเดือนแบบต่อเนื่องข้ามปี เพื่อให้เทียบเดือนธันวาคมกับมกราคมปีถัดไปได้ถูกต้อง
+    let lastActualIndex = 0;
+    for (let i = 0; i < actualRows.length; i++) {
+      const row = actualRows[i];
+      if (row.province !== selectedProvince) continue;
+      const index = row.year * 12 + row.month;
+      if (index > lastActualIndex) lastActualIndex = index;
+    }
+
+    // ถ้ายังไม่มีข้อมูลจริงเลย ให้ยึดเดือนก่อนหน้าค่าพยากรณ์แรกเป็นจุดเริ่ม
+    if (lastActualIndex === 0) {
+      let firstForecastIndex = allForecast[0].year * 12 + allForecast[0].month;
+      for (let i = 1; i < allForecast.length; i++) {
+        const index = allForecast[i].year * 12 + allForecast[i].month;
+        if (index < firstForecastIndex) firstForecastIndex = index;
+      }
+      lastActualIndex = firstForecastIndex - 1;
+    }
+
+    const year = Math.floor((lastActualIndex - 1) / 12);
 
     const myActual = [];
-    let lastActualMonth = 0;
     for (let i = 0; i < actualRows.length; i++) {
       const row = actualRows[i];
       if (row.province === selectedProvince && row.year === year) {
         myActual.push(row);
-        if (row.month > lastActualMonth) {
-          lastActualMonth = row.month;
-        }
       }
     }
 
     const myForecast = [];
     for (let i = 0; i < allForecast.length; i++) {
       const row = allForecast[i];
-      if (row.month > lastActualMonth && row.month <= lastActualMonth + FORECAST_HORIZON_MONTHS) {
+      const index = row.year * 12 + row.month;
+      if (index > lastActualIndex && index <= lastActualIndex + FORECAST_HORIZON_MONTHS) {
         myForecast.push(row);
       }
     }
@@ -394,11 +410,16 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     let lastActualMonth = 0;
     let lastMonth = 0;
 
+    // ตำแหน่งบนแกนนอน นับต่อจากเดือนมกราคมของปีที่แสดง
+    // เดือนของปีถัดไปจึงได้ตำแหน่ง 13 และ 14 ทำให้วาดต่อเนื่องข้ามปีได้
+    const positionOf = (row) => row.year * 12 + row.month - data.year * 12;
+
     for (let i = 0; i < data.actual.length; i++) {
       const row = data.actual[i];
-      actualByMonth[row.month] = row;
-      if (row.month > lastActualMonth) {
-        lastActualMonth = row.month;
+      const position = positionOf(row);
+      actualByMonth[position] = row;
+      if (position > lastActualMonth) {
+        lastActualMonth = position;
       }
     }
 
@@ -406,9 +427,10 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
 
     for (let i = 0; i < data.forecast.length; i++) {
       const row = data.forecast[i];
-      forecastByMonth[row.month] = row;
-      if (row.month > lastMonth) {
-        lastMonth = row.month;
+      const position = positionOf(row);
+      forecastByMonth[position] = row;
+      if (position > lastMonth) {
+        lastMonth = position;
       }
     }
 
@@ -437,7 +459,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
 
       result.push({
         month,
-        label: THAI_MONTHS_SHORT[month - 1],
+        label: THAI_MONTHS_SHORT[(month - 1) % 12],
         actual: actualValue,
         forecast: forecastValue,
         forecastRange,
