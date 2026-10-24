@@ -11,6 +11,7 @@ const CLUSTER_ZOOM_THRESHOLD = 12;
 const COLOR_TAMBON = '#2563eb';
 const COLOR_DISTRICT_FALLBACK = '#f59e0b';
 const COLOR_CLUSTER = '#1e3a8a';
+const MARKER_RADIUS = 10;
 
 function FitToMarkers({ markers }) {
   const map = useMap();
@@ -45,13 +46,6 @@ function ZoomWatcher({ onZoomChange }) {
   }, [map, onZoomChange]);
 
   return null;
-}
-
-function countMoo(mooText) {
-  if (!mooText) return 0;
-  const found = mooText.match(/\d+/g);
-  if (!found) return 1;
-  return found.length;
 }
 
 function buildYearsText(years) {
@@ -130,13 +124,6 @@ function UnmatchedNotice({ unmatched, districtLabel, subdistrictLabel }) {
   );
 }
 
-function getRadius(mooCount) {
-  if (mooCount >= 5) return 11;
-  if (mooCount >= 3) return 9;
-  if (mooCount >= 2) return 7;
-  return 6;
-}
-
 function buildDistrictClusters(markers) {
   const byDistrict = {};
 
@@ -148,14 +135,12 @@ function buildDistrictClusters(markers) {
         latSum: 0,
         lonSum: 0,
         count: 0,
-        mooCount: 0,
       };
     }
     const group = byDistrict[marker.district];
     group.latSum += marker.lat;
     group.lonSum += marker.lon;
     group.count += 1;
-    group.mooCount += countMoo(marker.mooText);
   }
 
   const clusters = [];
@@ -166,7 +151,6 @@ function buildDistrictClusters(markers) {
       lat: group.latSum / group.count,
       lon: group.lonSum / group.count,
       tambonCount: group.count,
-      mooCount: group.mooCount,
     });
   }
   return clusters;
@@ -259,7 +243,7 @@ export default function FloodAreaMapView({ districts, province }) {
         <CircleMarker
           key={cluster.district}
           center={[cluster.lat, cluster.lon]}
-          radius={getRadius(cluster.mooCount) + 2}
+          radius={MARKER_RADIUS}
           pathOptions={{
             color: '#ffffff',
             weight: 1.5,
@@ -299,7 +283,7 @@ export default function FloodAreaMapView({ districts, province }) {
         <CircleMarker
           key={marker.key}
           center={[marker.lat, marker.lon]}
-          radius={getRadius(countMoo(marker.mooText))}
+          radius={MARKER_RADIUS}
           pathOptions={{
             color: '#ffffff',
             weight: 1.5,
