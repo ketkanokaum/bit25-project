@@ -15,7 +15,7 @@ export default async function RainfallPage() {
       <div className="max-w-7xl mx-auto px-4 lg:px-6 py-8 flex flex-col gap-6">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight leading-tight">
-            ข้อมูลน้ำฝนย้อนหลัง
+            ข้อมูลปริมาณน้ำฝนย้อนหลัง
           </h1>
           <p className="text-slate-500 text-[15px]">
             ปริมาณน้ำฝนรายเดือน รายจังหวัด ตั้งแต่ปี 2561–2569

@@ -29,7 +29,7 @@ function formatMm(value) {
   return Number(value).toFixed(2);
 }
 
-function buildSummarySentence(province, monthName, forecastRow, rangeText, rainLevel) {
+function buildSummarySentence(province, monthName, forecastRow, rainLevel) {
   if (!forecastRow) return null;
 
   let sentence = `เดือน${monthName} จังหวัด${province}`;
@@ -37,11 +37,15 @@ function buildSummarySentence(province, monthName, forecastRow, rangeText, rainL
   if (rainLevel && rainLevel.tier != null) {
     sentence += ` ${rainLevel.label}`;
   }
-  sentence += ` คาดว่าจะมีปริมาณน้ำฝนประมาณ ${formatMm(forecastRow.predicted_rain)} มม.`;
 
-  if (rangeText) {
-    sentence += ` ค่าแนวโน้มปริมาณน้ำฝนอยู่ในช่วงประมาณ ${rangeText}`;
+  sentence += ` คาดว่าจะมีปริมาณน้ำฝนเฉลี่ยอยู่ที่ประมาณ ${formatMm(forecastRow.predicted_rain)} มิลลิเมตร`;
+
+  if (forecastRow.predicted_rain_lower != null && forecastRow.predicted_rain_upper != null) {
+    sentence +=
+      ` และค่าแนวโน้มปริมาณน้ำฝนเฉลี่ยอยู่ในช่วงประมาณ ` +
+      `${formatMm(forecastRow.predicted_rain_lower)} – ${formatMm(forecastRow.predicted_rain_upper)} มิลลิเมตร`;
   }
+
   return sentence;
 }
 
@@ -135,9 +139,9 @@ function ChartTooltip({ active, payload, label }) {
 
     let text = '';
     if (Array.isArray(entry.value)) {
-      text = `${entry.value[0].toFixed(1)} – ${entry.value[1].toFixed(1)} มม.`;
+      text = `${entry.value[0].toFixed(1)} – ${entry.value[1].toFixed(1)} มิลลิเมตร`;
     } else {
-      text = `${entry.value} มม.`;
+      text = `${entry.value} มิลลิเมตร`;
     }
 
     items.push({
@@ -323,7 +327,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     highlightForecast.predicted_rain_lower != null &&
     highlightForecast.predicted_rain_upper != null
   ) {
-    highlightRangeText = `${formatMm(highlightForecast.predicted_rain_lower)} – ${formatMm(highlightForecast.predicted_rain_upper)} มม.`;
+    highlightRangeText = `${formatMm(highlightForecast.predicted_rain_lower)} – ${formatMm(highlightForecast.predicted_rain_upper)} มิลลิเมตร`;
   }
 
   let highlightSummarySentence = null;
@@ -332,7 +336,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       selectedProvince,
       highlightMonthName,
       highlightForecast,
-      highlightRangeText,
       highlightTier
     );
   }
@@ -655,7 +658,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                     <span className="text-[52px] font-black text-slate-900 leading-none">
                       {formatMm(highlightForecast.predicted_rain)}
                     </span>
-                    <span className="text-[17px] font-bold text-slate-400">มม.</span>
+                    <span className="text-[17px] font-bold text-slate-400">มิลลิเมตร</span>
                   </p>
                   <span className={`inline-block mt-3.5 text-[13px] font-bold px-4 py-1.5 rounded-full ${highlightStyle.badge}`}>
                     {highlightTier.label}
@@ -707,7 +710,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#64748b' }} />
                 <YAxis
                   tick={{ fontSize: 11, fill: '#94a3b8' }}
-                  label={{ value: 'มม.', angle: -90, position: 'insideLeft', fontSize: 11 }}
+                  label={{ value: 'มิลลิเมตร', angle: -90, position: 'insideLeft', fontSize: 11 }}
                 />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -806,7 +809,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                   <div className="bg-slate-50 rounded-xl p-4">
                     <p className="text-2xl font-black text-slate-800 leading-none">
                       {formatMm(displayRainfall)}
-                      <span className="text-xs font-bold text-slate-400 ml-1">มม.</span>
+                      <span className="text-xs font-bold text-slate-400 ml-1">มิลลิเมตร</span>
                     </p>
                     <p className="text-xs text-slate-500 mt-1.5">{displayRainfallText}</p>
                   </div>
@@ -814,7 +817,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
                   <div className="bg-slate-50 rounded-xl p-4">
                     <p className="text-2xl font-black text-slate-800 leading-none">
                       {formatMm(currentRain.max)}
-                      <span className="text-xs font-bold text-slate-400 ml-1">มม.</span>
+                      <span className="text-xs font-bold text-slate-400 ml-1">มิลลิเมตร</span>
                     </p>
                     <p className="text-xs text-slate-500 mt-1.5">ค่าสูงสุดที่ตรวจวัด</p>
                     {currentRain.maxStation && (

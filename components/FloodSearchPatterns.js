@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { CircularProgress } from "@mui/material";
 import dynamic from "next/dynamic";
 import TuneIcon from "@mui/icons-material/Tune";
@@ -30,7 +30,6 @@ const SEARCH_LABELS = {
 };
 
 const thaiMonthNames = { 1: "มกราคม", 2: "กุมภาพันธ์", 3: "มีนาคม", 4: "เมษายน", 5: "พฤษภาคม", 6: "มิถุนายน", 7: "กรกฎาคม", 8: "สิงหาคม", 9: "กันยายน", 10: "ตุลาคม", 11: "พฤศจิกายน", 12: "ธันวาคม" };
-const shortMonthNames = { 1: "ม.ค.", 2: "ก.พ.", 3: "มี.ค.", 4: "เม.ย.", 5: "พ.ค.", 6: "มิ.ย.", 7: "ก.ค.", 8: "ส.ค.", 9: "ก.ย.", 10: "ต.ค.", 11: "พ.ย.", 12: "ธ.ค." };
 
 const RISK_LEVELS = [
   {
@@ -39,7 +38,7 @@ const RISK_LEVELS = [
       title: "ติดตามสถานการณ์ตามปกติ",
       bullets: ["ตรวจสอบพยากรณ์อากาศเป็นระยะ", "ติดตามข่าวสารจากหน่วยงานในพื้นที่", "ยังไม่จำเป็นต้องเตรียมการเป็นพิเศษ"],
     },
-    tw: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", badge: "bg-green-100 text-green-700" },
+    tw: { text: "text-green-700" },
   },
   {
     key: "medium", label: "เฝ้าระวังปานกลาง",
@@ -47,7 +46,7 @@ const RISK_LEVELS = [
       title: "รับมืออุทกภัย",
       bullets: ["ติดตามพยากรณ์อากาศและประกาศเตือนภัย พร้อมปฏิบัติตามอย่างเคร่งครัด", "จัดเตรียมสิ่งของเครื่องใช้ที่จำเป็นไว้ใช้เมื่อเกิดภัย (ถุงยังชีพ)", "จัดสภาพแวดล้อมให้ปลอดภัยจากน้ำท่วม", "หมั่นสังเกตสัญญาณความผิดปกติทางธรรมชาติ"],
     },
-    tw: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", badge: "bg-amber-100 text-amber-700" },
+    tw: { text: "text-amber-700" },
   },
   {
     key: "high", label: "เฝ้าระวังสูง",
@@ -55,7 +54,7 @@ const RISK_LEVELS = [
       title: "ปฏิบัติตนปลอดภัย",
       bullets: ["ติดตามพยากรณ์อากาศและประกาศเตือนภัย พร้อมปฏิบัติตามอย่างเคร่งครัด", "ขนย้ายสิ่งของเครื่องใช้ขึ้นที่สูง", "ตัดกระแสไฟฟ้าและงดใช้เครื่องใช้ไฟฟ้าเมื่อน้ำท่วมบ้าน", "ระมัดระวังภัยในช่วงน้ำท่วม อาทิ จมน้ำ สัตว์มีพิษ ไฟฟ้าดูด", "หากสถานการณ์รุนแรง ให้อพยพไปตามเส้นทางที่ปลอดภัย"],
     },
-    tw: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", badge: "bg-red-100 text-red-700" },
+    tw: { text: "text-red-700" },
   },
 ];
 
@@ -116,10 +115,7 @@ function countFloodYears(data, province, month) {
     }
   }
 
-  return {
-    years: years, count: years.length,
-    total: REAL_DATA_YEARS.length, rate: years.length / REAL_DATA_YEARS.length,
-  };
+  return { count: years.length, total: REAL_DATA_YEARS.length };
 }
 
 function getMonthRow(data, province, year, month) {
@@ -187,15 +183,11 @@ function predictFlood(data, province, year, month) {
   const history = countFloodYears(data, province, selectedMonth);
 
   if (REAL_DATA_YEARS.includes(selectedYear)) {
-    const events = getFloodEvents(data, province, selectedYear, selectedMonth);
-    const occurred = events.length > 0;
-    let score = 0;
-    if (occurred) score = 1;
+    const occurred = getFloodEvents(data, province, selectedYear, selectedMonth).length > 0;
 
     return {
       method: "confirmed", label: "สถิติที่เกิดขึ้นจริง",
-      score: score, occurred: occurred,
-      requiresMonitoring: occurred, history: history, note: "",
+      requiresMonitoring: occurred, history: history,
     };
   }
 
@@ -244,7 +236,7 @@ function formatThaiDate(dateStr) {
   const day = d.getUTCDate();
   const month = d.getUTCMonth() + 1;
   const year = d.getUTCFullYear() + 543;
-  return `${day} ${shortMonthNames[month]} ${String(year).slice(-2)}`;
+  return `${day} ${thaiMonthNames[month]} ${year}`;
 }
 
 function formatCountOrDash(n) {
