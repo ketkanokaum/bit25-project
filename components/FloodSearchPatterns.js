@@ -883,7 +883,7 @@ export default function FloodSearchPatterns({
 
   let rainStatusText;
   if (avgRain == null) {
-    rainStatusText = "ไม่มีข้อมูลปริมาณฝนเดือนนี้";
+    rainStatusText = "ไม่มีข้อมูลปริมาณน้ำฝนเดือนนี้";
   } else {
     rainStatusText = rainTier.label;
   }
