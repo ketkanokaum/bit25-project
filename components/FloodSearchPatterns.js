@@ -580,65 +580,73 @@ export default function FloodSearchPatterns({
   const ruleCountInfo = { total: activeRules.length, shown: visibleRules.length };
   const graphRef = useRef(null);
 
-  const graphData = useMemo(() => {
-    const rulesForGraph = filterRulesByConfidence(activeRules, confidenceThreshold);
-    rulesForGraph.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+const graphData = useMemo(() => {
+  const rulesForGraph = filterRulesByConfidence(activeRules, confidenceThreshold);
+  rulesForGraph.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
-    const uniqueRules = [];
-    const seenPairs = new Set();
+  const uniqueRules = [];
+  const seenRules = new Set();
 
-    for (let i = 0; i < rulesForGraph.length; i++) {
-      const rule = rulesForGraph[i];
-      const antecedents = asArray(rule.antecedents).sort();
-      const consequents = asArray(rule.consequents).sort();
-      const pairKey = [...antecedents, ...consequents].sort().join("|");
+  for (let i = 0; i < rulesForGraph.length; i++) {
+    const rule = rulesForGraph[i];
+    const antecedents = [...asArray(rule.antecedents)].sort();
+    const consequents = [...asArray(rule.consequents)].sort();
+    const ruleKey = JSON.stringify([antecedents, consequents]);
 
-      if (!seenPairs.has(pairKey)) {
-        seenPairs.add(pairKey);
-        uniqueRules.push(rule);
-      }
+    if (!seenRules.has(ruleKey)) {
+      seenRules.add(ruleKey);
+      uniqueRules.push(rule);
     }
+  }
 
-    const topRules = uniqueRules.slice(0, TOP_RULES_LIMIT);
-    const nodesById = {};
-    const nodeOrder = [];
-    const links = [];
+  const topRules = uniqueRules.slice(0, TOP_RULES_LIMIT);
+  const nodesById = {};
+  const nodeOrder = [];
+  const links = [];
 
-    for (let i = 0; i < topRules.length; i++) {
-      const rule = topRules[i];
-      const antecedents = asArray(rule.antecedents);
-      const consequents = asArray(rule.consequents);
+  for (let i = 0; i < topRules.length; i++) {
+    const rule = topRules[i];
+    const antecedents = asArray(rule.antecedents);
+    const consequents = asArray(rule.consequents);
 
-      for (let j = 0; j < antecedents.length; j++) {
-        const antId = antecedents[j];
+    for (let j = 0; j < antecedents.length; j++) {
+      const antWord = antecedents[j];
+      const antId = "antecedent|" + antWord;
 
-        if (!nodesById[antId]) {
-          nodesById[antId] = { id: antId, label: translateWord(antId), rawId: antId, group: "cause", val: 3 };
-          nodeOrder.push(antId);
+      if (!nodesById[antId]) {
+        nodesById[antId] = {
+          id: antId, label: translateWord(antWord),
+          rawId: antWord, group: "cause", val: 3,
+        };
+        nodeOrder.push(antId);
+      }
+
+      for (let k = 0; k < consequents.length; k++) {
+        const conWord = consequents[k];
+        const conId = "consequent|" + conWord;
+
+        if (!nodesById[conId]) {
+          nodesById[conId] = {
+            id: conId, label: translateWord(conWord),
+            rawId: conWord, group: "effect", val: 3,
+          };
+          nodeOrder.push(conId);
         }
 
-        for (let k = 0; k < consequents.length; k++) {
-          const conId = consequents[k];
-
-          if (!nodesById[conId]) {
-            nodesById[conId] = { id: conId, label: translateWord(conId), rawId: conId, group: "effect", val: 3 };
-            nodeOrder.push(conId);
-          }
-
-          if (antId !== conId) {
-            links.push({ source: antId, target: conId });
-          }
+        if (antWord !== conWord) {
+          links.push({ source: antId, target: conId });
         }
       }
     }
+  }
 
-    const nodes = [];
-    for (let i = 0; i < nodeOrder.length; i++) {
-      nodes.push(nodesById[nodeOrder[i]]);
-    }
+  const nodes = [];
+  for (let i = 0; i < nodeOrder.length; i++) {
+    nodes.push(nodesById[nodeOrder[i]]);
+  }
 
-    return { nodes, links };
-  }, [activeRules, confidenceThreshold]);
+  return { nodes, links };
+}, [activeRules, confidenceThreshold]);
 
   useEffect(() => {
     const fg = graphRef.current;
@@ -1144,7 +1152,7 @@ export default function FloodSearchPatterns({
     summaryMethodologyText = `${provinceNamePart}${historyClause}${searchClause} ${judgementLead} ${levelClause}`;
 
     if (activeRules.length > 0) {
-      summaryMethodologyText += " โดยพบกฎความสัมพันธ์บางกฎจากการวิเคราะห์ข้อมูลย้อนหลังที่สอดคล้องกับข้อมูลของเดือนที่เลือก";
+      summaryMethodologyText += " โดยพบกฎความสัมพันธ์จากการวิเคราะห์ข้อมูลย้อนหลังที่ตรงกับเงื่อนไขของข้อมูลจังหวัดและเดือนปีที่เลือก";
     }
   }
 
