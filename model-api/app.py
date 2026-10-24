@@ -6,9 +6,8 @@ from pathlib import Path
 
 app = Flask(__name__)
 
-MODEL_PATH = Path("rf_rainfall_model.pkl")  
+MODEL_PATH = Path(__file__).resolve().parent / "rf_rainfall_model.pkl"
 FORECAST_MONTHS = 3
-
 
 with open(MODEL_PATH, "rb") as f:
     bundle = pickle.load(f)
@@ -19,7 +18,6 @@ LOWER_PERCENTILE, UPPER_PERCENTILE = bundle["interval_percentiles"]
 
 print("โหลดแบบจำลองแล้ว", len(models), "จังหวัด")
 print("ฝึกสอนด้วยข้อมูล", bundle["train_start"], "ถึง", bundle["train_end"])
-
 
 def forecast_province(province, months):
     model = models[province]
@@ -47,16 +45,13 @@ def forecast_province(province, months):
         })
     return results
 
-
 @app.get("/")
 def home():
     return send_from_directory(".", "index.html")
 
-
 @app.get("/provinces")
 def provinces():
     return jsonify({"provinces": sorted(models.keys()), "count": len(models)})
-
 
 @app.post("/predict")
 def predict():
@@ -87,7 +82,6 @@ def predict():
         "train_end": bundle["train_end"],
         "forecast": forecast_province(province, months),
     })
-
 
 @app.post("/forecast-all")
 def forecast_all():
@@ -127,7 +121,6 @@ def forecast_all():
         "count": len(rows),
         "forecast": rows,
     })
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)
