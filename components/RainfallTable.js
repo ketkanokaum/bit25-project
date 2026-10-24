@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import RainfallChart from './RainfallChart';
 import { provinceRegions, regionOrder } from '@/lib/constants/provinces';
 
