@@ -6,7 +6,11 @@ import HighchartsReact from 'highcharts-react-official';
 
 const thaiMonths = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
-export default function RainfallChart({ data, selectedProvince, selectedYear }) {
+export default function RainfallChart({ 
+    data, 
+    selectedProvince, 
+    selectedYear })
+{
 
     const chartOptions = useMemo(() => {
         let filteredByProvince = [];

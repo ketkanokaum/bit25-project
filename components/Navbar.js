@@ -9,19 +9,13 @@ export default function Navbar() {
   const navItems = [
     {
       href: '/',
-      label: 'ปริมาณน้ำฝนล่วงหน้า',
-      shortLabel: 'ล่วงหน้า',
-    },
+      label: 'ปริมาณน้ำฝนล่วงหน้า',},
     {
       href: '/pattern',
-      label: 'เฝ้าระวังอุทกภัย',
-      shortLabel: 'เฝ้าระวัง',
-    },
+      label: 'เฝ้าระวังอุทกภัย',},
     {
       href: '/rainfall',
-      label: 'ปริมาณน้ำฝนย้อนหลัง',
-      shortLabel: 'ย้อนหลัง',
-    },
+      label: 'ปริมาณน้ำฝนย้อนหลัง',},
   ];
 
   const navLinkItems = [];

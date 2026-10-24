@@ -26,7 +26,7 @@ const THAI_MONTHS_SHORT = [
 
 function formatMm(value) {
   if (value == null) return null;
-  return Number(value).toFixed(1);
+  return Number(value).toFixed(2);
 }
 
 function buildSummarySentence(province, monthName, forecastRow, rangeText, rainLevel) {
@@ -37,13 +37,11 @@ function buildSummarySentence(province, monthName, forecastRow, rangeText, rainL
   if (rainLevel && rainLevel.tier != null) {
     sentence += ` ${rainLevel.label}`;
   }
-
   sentence += ` คาดว่าจะมีปริมาณน้ำฝนประมาณ ${formatMm(forecastRow.predicted_rain)} มม.`;
 
   if (rangeText) {
     sentence += ` ค่าแนวโน้มปริมาณน้ำฝนอยู่ในช่วงประมาณ ${rangeText}`;
   }
-
   return sentence;
 }
 
@@ -196,7 +194,6 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
       }
       if (!cancelled) setLoadingTodayRainfall(false);
     }
-
     loadTodayRainfall();
 
     return () => {
@@ -254,9 +251,11 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
         allForecast.push(forecastRows[i]);
       }
     }
-    if (allForecast.length === 0) return null;
+    if (allForecast.length === 0) 
+      return null;
 
-    let lastActualIndex = 0;
+    // หาเดือนล่าสุดที่มีข้อมูล
+    let lastActualIndex = 0; 
     for (let i = 0; i < actualRows.length; i++) {
       const row = actualRows[i];
       if (row.province !== selectedProvince) continue;

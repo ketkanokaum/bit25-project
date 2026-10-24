@@ -4,12 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
-import {
-  TAMBON_POINTS_URL,
-  buildPointIndex,
-  buildFloodMarkers,
-  getMarkersCenter,
-} from '@/lib/tambon-points';
+import {TAMBON_POINTS_URL,buildPointIndex,buildFloodMarkers,getMarkersCenter,} from '@/lib/tambon-points';
 
 const CLUSTER_ZOOM_THRESHOLD = 12;
 
