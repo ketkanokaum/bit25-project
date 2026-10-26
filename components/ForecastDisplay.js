@@ -258,8 +258,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
     if (allForecast.length === 0) 
       return null;
 
-    // หาเดือนล่าสุดที่มีข้อมูล
-    let lastActualIndex = 0; 
+    let lastActualIndex = 0;
     for (let i = 0; i < actualRows.length; i++) {
       const row = actualRows[i];
       if (row.province !== selectedProvince) continue;
@@ -547,7 +546,7 @@ export default function ForecastDisplay({ initialProvince, forecastRows, actualR
         key={level.key}
         className="flex-1 text-center py-1.5 text-[11px] font-bold text-slate-600 bg-white"
       >
-        {level.shortLabel}
+        {level.label}
       </div>
     );
   }
