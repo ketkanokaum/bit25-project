@@ -247,22 +247,7 @@ const graphData = useMemo(() => {
   const rulesForGraph = filterRulesByConfidence(activeRules, confidenceThreshold);
   rulesForGraph.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
-  const uniqueRules = [];
-  const seenRules = new Set();
-
-  for (let i = 0; i < rulesForGraph.length; i++) {
-    const rule = rulesForGraph[i];
-    const antecedents = [...asArray(rule.antecedents)].sort();
-    const consequents = [...asArray(rule.consequents)].sort();
-    const ruleKey = JSON.stringify([antecedents, consequents]);
-
-    if (!seenRules.has(ruleKey)) {
-      seenRules.add(ruleKey);
-      uniqueRules.push(rule);
-    }
-  }
-
-  const topRules = uniqueRules.slice(0, TOP_RULES_LIMIT);
+  const topRules = rulesForGraph.slice(0, TOP_RULES_LIMIT);
   const nodesById = {};
   const nodeOrder = [];
   const links = [];
@@ -584,7 +569,7 @@ const graphData = useMemo(() => {
       const consequentTags = buildWordTagList(consequentLabels, "bg-sky-50 text-sky-700 border-sky-100");
 
       cards.push(
-        <div key={i} className="flex flex-col gap-3 p-5">
+        <div key={rule.id} className="flex flex-col gap-3 p-5">
           <div className="flex flex-col gap-2">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">กฎที่ตรงกับข้อมูลจริง</span>
             <div className="flex flex-wrap gap-2">{antecedentTags}</div>
