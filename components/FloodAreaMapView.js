@@ -311,9 +311,6 @@ export default function FloodAreaMapView({ districts, province }) {
                   แสดงที่จุดกลาง{districtLabel} เพราะไม่พบพิกัดของ{subdistrictLabel}นี้
                 </div>
               )}
-              <div className="mt-1.5 pt-1.5 border-t border-slate-200 text-slate-400 text-[11px]">
-                หมุดอยู่ที่จุดกลาง{subdistrictLabel} ไม่ใช่ตำแหน่งของหมู่ และไม่ใช่ขอบเขตน้ำท่วมจริง
-              </div>
             </div>
           </Popup>
         </CircleMarker>
