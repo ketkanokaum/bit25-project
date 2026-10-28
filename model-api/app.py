@@ -16,7 +16,6 @@ models = bundle["models"]
 FEATURES = bundle["features"]
 LOWER_PERCENTILE, UPPER_PERCENTILE = bundle["interval_percentiles"]
 
-print("โหลดแบบจำลองแล้ว", len(models), "จังหวัด")
 print("ฝึกสอนด้วยข้อมูล", bundle["train_start"], "ถึง", bundle["train_end"])
 
 def forecast_province(province, months):
@@ -91,7 +90,7 @@ def forecast_all():
     last_month = int(data.get("last_actual_month", 0))
 
     if last_year < 2000 or last_month < 1 or last_month > 12:
-        return jsonify({"error": "ต้องระบุ last_actual_year และ last_actual_month"}), 400
+        return jsonify({"error": "ระบุ last_actual_year และ last_actual_month"}), 400
 
     periods = []
     index = last_year * 12 + last_month
